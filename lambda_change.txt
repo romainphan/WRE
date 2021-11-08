@@ -1,0 +1,13 @@
+% change in monthly occurence of rainy days [%]
+20
+20
+20
+20
+20
+20
+20
+20
+20
+20
+20
+20
