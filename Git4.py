@@ -14,28 +14,45 @@ import scipy as scipy
 from scipy import optimize
 import scipy.misc
 from scipy.misc import derivative
+import scipy.stats as stats
 
-#os.chdir("C:/Users/marie/Documents/WREProj")
 
 # mean monthly temperature [C]
-temperature= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature.txt")
+try :
+    temperature= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature.txt")
+except FileNotFoundError:
+    temperature = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/temperature.txt")
 T_m=temperature.T.to_numpy()[0]
 
+
 # hourly precipitation intensity [mm/h] for the period 01/01/2000 to 31/12/2005
-precipitation=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/P.txt").T.to_numpy()[0]
+try :
+    precipitation=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/P.txt").T.to_numpy()[0]
+except FileNotFoundError:
+    precipitation = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/P.txt").T.to_numpy()[0]
+
 
 # Changes in monthly temperature [degrees C]
-temperature_change= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature_change.txt")
+try:
+    temperature_change= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature_change.txt")
+except FileNotFoundError:
+    temperature_change = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/temperature_change.txt")
 T_c=temperature_change.T.to_numpy()[0]
 
+
 # monthly mean crop coefficient [-] (average among all the crops and soil uses of the basin
-cropcoeff=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/kc.txt")
+try :
+    cropcoeff=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/kc.txt")
+except FileNotFoundError:
+    cropcoeff = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/kc.txt")
 K_c=cropcoeff.T.to_numpy()[0]
 
-# instantaneous discharge at hourly time step [m3/s] for the period 01/01/2000 to 31/12/2004
-Q_obs=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/Q_obs.txt").T.to_numpy()[0]
 
-plt.plot(precipitation)
+# instantaneous discharge at hourly time step [m3/s] for the period 01/01/2000 to 31/12/2004
+try :
+    Q_obs=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/Q_obs.txt").T.to_numpy()[0]
+except FileNotFoundError:
+    Q_obs = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/Q_obs.txt")
 
 
 # PARAMETERS
@@ -55,7 +72,7 @@ K_sat=1e-5           # [m/s] Saturated hydraulic conductivity
 K_sat_h = K_sat*3600  # [m/h] Saturated hydraulic conductivity
 c=10                # [-] exponent of ksat for the equation k = ksat * s^c
 t_sub=200            # [h] mean sub-superficial residence time
-z=1                  # [m] root zone thickness
+z=1000               # [mm] root zone thickness
 
 day_month=[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] #"day_month": number of days for each month
 month_end=np.cumsum(day_month)-1                    #"month_end": last day of each month
@@ -126,18 +143,7 @@ def f_ET(t,s):
 
 ################################
 
-def P(t):
-    """
-    Input : t [h] the hour at which the calculation is done
-    Output : P [m3/s] Total precipitation over the whole basin
-    
-    P(t) = p * Area
-    
-    /!\ p is given in mm/h
-    """
-    return precipitation[int(t)]*A*1e-3 / 3600
 
-f_ET(0,0.3)
 
 def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0):
     """
@@ -220,7 +226,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         
         # soil moisture
         try :
-            s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z) /1000  # 1000 factor to account for mm/h converted to m/h
+            s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z)
         except IndexError:
             break
         
@@ -233,41 +239,30 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     
     return [Q, R, I, s, L, ET]
 
-print(1e-6*1000*3600)
+#print(1e-6*1000*3600)
 plt.plot(precipitation[0:int(len(precipitation)/5)])
 
-output = hydr_model(1e-7, c, t_sub, z, precipitation, K_c, 1)
+# output = hydr_model(1e-7, c, t_sub, z, precipitation, K_c, 1)
 
 
-for i in range(6):
-    plt.figure()
-    plt.plot(output[i])
-    plt.show()
+# for i in range(6):
+#     plt.figure()
+#     plt.plot(output[i])
+#     plt.show()
     
-Q_b
-time = [k for k in range(52560)]
-sum([P(t) for t in time])
-plt.plot(time,[Q_obs[t] for t in time])
-#plt.plot(time,[R(t) for t in time])
 
-s=np.linspace(0,1,90)
-E=[f_ET(24*90,si) for si in s]
-plt.plot(s,E)
-plt.title ("Evapotranspitation")
-plt.xlabel("soil moisture")
-plt.ylabel("ET(s)")
 
 
 
 ## Part 2 
-gamma=9806*10**(-9)  #[N/mm^3]
-eta=0.8     #turbine efficienct [-]
-delta_z=100*10**(3) #[mm]
+# gamma=9806*10**(-9)  #[N/mm^3]
+# eta=0.8     #turbine efficiency [-]
+# delta_z=100*10**(3) #[mm]
 
-def P(Q): 
-    return (eta*gamma*delta_z*Q)-(eta*gamma*K_sat*10**(3)*(Q**3))   #
-print(scipy.misc.derivative(P,0))
-Q_obs_pred=scipy.misc.derivative(P,0)
+# def P(Q): 
+#     return (eta*gamma*delta_z*Q)-(eta*gamma*K_sat*10**(3)*(Q**3))   #
+# print(scipy.misc.derivative(P,0))
+# Q_obs_pred=scipy.misc.derivative(P,0)
 
 N_inter = 52560
 K_sat_MC=np.zeros(N_inter)
@@ -289,6 +284,75 @@ s_z=np.std(z_MC)
 #Q_mod=
 #for t in range (52560):
     #NS=1-(sum((Q_obs(t)-Q_mod)^2)/(sum(Q_obs(t)-Q_obs_pred)^2))
+
+
+c_r = 1/1200        # cooling rate
+Q_mod_avg = [0 for i in Q_obs]
+
+def T_SA(i):
+    return np.exp(-c_r*i)
+
+def NS(Q):
+    # print(Q, Q_obs, Q_mod_avg)
+    # print(np.diff(Q, Q_obs))
+    # print(np.diff(Q, Q_mod_avg))
+    # print(Q)
+    return 1 - ((np.subtract(Q, Q_obs))**2)/((np.subtract(Q, Q_mod_avg))**2)
+
+#def opt_param():
+
+    
+    theta_old = [K_sat, c, t_sub, z]  # initial values of the parameters
+    theta_new = theta_old.copy()
+    theta_minmax = [[1e-7, 1e-5], 
+                    [1, 20],
+                    [1, 400],
+                    [1, 2000]]      # min/max values of the parameters
+    theta_avg = [np.mean(i) for i in theta_minmax]  # average values of the parameters
+    theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
+    Q_mod_avg = [0 for i in Q_obs]
+    Q_mod_sum = Q_mod_avg.copy()    
+
+
+    ns_old = 0      # value of the NS coefficient
+    ns_new = 0
+    n_sim = 0       # nb of simulations yet
+    seuil = 0.87    # seuil pour le NS coeff    
+    
+    print("Seuil choisi de : ", seuil)
+    
+    while ns_old < seuil:
+        
+        # generate new parameters
+        for i in range(4):
+            while 1:    
+                theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
+                
+                if theta_new[i] > theta_minmax[i][0] and theta_new[i] < theta_minmax[i][1]:
+                    break
+                
+    
+        
+        Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
+        Q_mod_sum  = np.add(Q_mod_sum, Q_mod)
+        n_sim += 1
+        Q_mod_avg = np.divide(Q_mod_sum, n_sim)
+        ns_new = NS(Q_mod)
+        
+        if ns_new > ns_old:
+            print("\nValeur de NS améliorée !")
+            print("NS = ", ns_new)
+            theta_old = theta_new.copy()
+            ns_old = ns_new
+        
+        elif np.random.uniform < np.exp((ns_new-ns_old)/T_SA(n_sim)):
+            print("\nOn va voir ailleurs !")
+            
+            theta_old = theta_new.copy()
+            ns_old = ns_new
+            
+    return theta_old
+
 
 
 
