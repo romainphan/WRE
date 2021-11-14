@@ -10,49 +10,36 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy as scipy
-from scipy import optimize
-import scipy.misc
-from scipy.misc import derivative
-import scipy.stats as stats
+# import scipy as scipy
+# from scipy import optimize
+# import scipy.misc
+# from scipy.misc import derivative
+# import scipy.stats as stats
+
+dirname = os.path.dirname(__file__)
 
 
 # mean monthly temperature [C]
-try :
-    temperature= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature.txt")
-except FileNotFoundError:
-    temperature = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/temperature.txt")
+temperature= pd.read_csv(dirname+"/temperature.txt")
 T_m=temperature.T.to_numpy()[0]
 
 
 # hourly precipitation intensity [mm/h] for the period 01/01/2000 to 31/12/2005
-try :
-    precipitation=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/P.txt").T.to_numpy()[0]
-except FileNotFoundError:
-    precipitation = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/P.txt").T.to_numpy()[0]
+precipitation=pd.read_csv(dirname+"/P.txt").T.to_numpy()[0]
 
 
 # Changes in monthly temperature [degrees C]
-try:
-    temperature_change= pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/temperature_change.txt")
-except FileNotFoundError:
-    temperature_change = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/temperature_change.txt")
+temperature_change= pd.read_csv(dirname+"/temperature_change.txt")
 T_c=temperature_change.T.to_numpy()[0]
 
 
 # monthly mean crop coefficient [-] (average among all the crops and soil uses of the basin
-try :
-    cropcoeff=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/kc.txt")
-except FileNotFoundError:
-    cropcoeff = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/kc.txt")
+cropcoeff=pd.read_csv(dirname+"/kc.txt")
 K_c=cropcoeff.T.to_numpy()[0]
 
 
 # instantaneous discharge at hourly time step [m3/s] for the period 01/01/2000 to 31/12/2004
-try :
-    Q_obs=pd.read_csv("/Users/magelineduquesne/Documents/Documents/EPFL/SIE/Master_1/WRE/WRE_project/Q_obs.txt").T.to_numpy()[0]
-except FileNotFoundError:
-    Q_obs = pd.read_csv("C:/Users/Romain/Documents/GitHub/WRE/Q_obs.txt")
+Q_obs=pd.read_csv(dirname+"/Q_obs.txt").T.to_numpy()[0]
 
 
 # PARAMETERS
@@ -287,37 +274,50 @@ s_z=np.std(z_MC)
 
 
 c_r = 1/1200        # cooling rate
+theta_old = [K_sat, c, t_sub, z]  # initial values of the parameters
+theta_new = theta_old.copy()
+theta_minmax = [[1e-7, 1e-5], 
+                [1, 20],
+                [1, 400],
+                [1, 2000]]      # min/max values of the parameters
+theta_avg = [np.mean(i) for i in theta_minmax]  # average values of the parameters
+theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
 Q_mod_avg = [0 for i in Q_obs]
+Q_mod_sum = Q_mod_avg.copy()
+
+
+
+
 
 def T_SA(i):
     return np.exp(-c_r*i)
 
 def NS(Q):
+    global Q_mod_avg
+    global Q_obs
     # print(Q, Q_obs, Q_mod_avg)
     # print(np.diff(Q, Q_obs))
     # print(np.diff(Q, Q_mod_avg))
     # print(Q)
-    return 1 - ((np.subtract(Q, Q_obs))**2)/((np.subtract(Q, Q_mod_avg))**2)
+    return 1 - np.sum((np.subtract(Q, Q_obs))**2)/np.sum((np.subtract(Q, Q_mod_avg))**2)
 
-#def opt_param():
+def opt_param(print_progress = False):
 
-    
-    theta_old = [K_sat, c, t_sub, z]  # initial values of the parameters
-    theta_new = theta_old.copy()
-    theta_minmax = [[1e-7, 1e-5], 
-                    [1, 20],
-                    [1, 400],
-                    [1, 2000]]      # min/max values of the parameters
-    theta_avg = [np.mean(i) for i in theta_minmax]  # average values of the parameters
-    theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
-    Q_mod_avg = [0 for i in Q_obs]
-    Q_mod_sum = Q_mod_avg.copy()    
+    global theta_old
+    global Q_mod_sum
+    global Q_mod_avg
+        
 
 
     ns_old = 0      # value of the NS coefficient
     ns_new = 0
     n_sim = 0       # nb of simulations yet
-    seuil = 0.87    # seuil pour le NS coeff    
+    seuil = 0.87    # seuil pour le NS coeff  
+    iteration_max = 1e3
+    iteration = 0
+    theta_absolute_max = [0, 0, 0, 0]
+    ns_absolute_max = -10
+    
     
     print("Seuil choisi de : ", seuil)
     
@@ -325,11 +325,19 @@ def NS(Q):
         
         # generate new parameters
         for i in range(4):
-            while 1:    
+            keep_gen = True
+            n_limit = 100
+            n_actual = 0
+            while keep_gen: 
+                n_actual += 1
                 theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
                 
                 if theta_new[i] > theta_minmax[i][0] and theta_new[i] < theta_minmax[i][1]:
-                    break
+                    keep_gen = False
+                elif n>n_limit:
+                    keep_gen = False
+                    if print_progress:
+                        print("\nLimite de la boucle dépassée pour la génération des nuveaux paramètres")
                 
     
         
@@ -339,19 +347,35 @@ def NS(Q):
         Q_mod_avg = np.divide(Q_mod_sum, n_sim)
         ns_new = NS(Q_mod)
         
+        # print(ns_new)
+        # print("#"*50)
+        # print(ns_old)
+        
+        if ns_new > ns_absolute_max:
+            theta_absolute_max = theta_new.copy()
+            ns_absolute_max = ns_new
+        
         if ns_new > ns_old:
-            print("\nValeur de NS améliorée !")
-            print("NS = ", ns_new)
+            if print_progress:
+                print("\nValeur de NS améliorée !")
+                print("NS = ", ns_new)
             theta_old = theta_new.copy()
             ns_old = ns_new
         
-        elif np.random.uniform < np.exp((ns_new-ns_old)/T_SA(n_sim)):
-            print("\nOn va voir ailleurs !")
+        elif np.random.uniform() < np.exp((ns_new-ns_old)/T_SA(n_sim)):
+            if print_progress:
+                print("\nOn va voir ailleurs !")
             
             theta_old = theta_new.copy()
             ns_old = ns_new
-            
-    return theta_old
+        
+        iteration += 1
+        if iteration > iteration_max:
+            if print_progress:
+                print("Iterations maximales dépassées pour la boucle principale")
+            break
+        
+    return theta_old, ns_absolute_max, theta_absolute_max
 
 
 
