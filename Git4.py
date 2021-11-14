@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("error")
+import time
 # import scipy as scipy
 # from scipy import optimize
 # import scipy.misc
@@ -231,7 +232,10 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z)
             
             if s[t+1] < 0:
-                raise ValueError("Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
+                # print("\nWARNING !")
+                # print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
+                # print("    Setting it to 0")
+                s[t+1] = 0
         except IndexError:
             break
         
@@ -448,9 +452,9 @@ def find_Q_mean(n_div):
     
     theta_incr = [(x[1]-x[0]) /n_div for x in theta_minmax]
     
-    Q_out = []
+    Q_out = [0 for i in range(52560)]
     n = 0
-    n_tot = (n_div)**4
+    n_tot = (n_div+1)**4
     
     
     val_1 = theta_minmax[1][0]
@@ -458,6 +462,7 @@ def find_Q_mean(n_div):
     val_3 = theta_minmax[3][0]
     
     print("Beginning calculations...\n")
+    start = time.time()
     
     for i in range(n_div+1):
         val_0 = theta_minmax[0][0] + i*theta_incr[0]
@@ -475,13 +480,19 @@ def find_Q_mean(n_div):
                     
                     Q_sim = hydr_model(val_0, val_1, val_2, val_3, precipitation, K_c, 6)[0]
                    
-                    Q_out = np.sum(Q_out, Q_sim)
+                    Q_out = np.add(Q_out, Q_sim)
                     n += 1
+                    actual_time = time.time()
                     
-                    perc = int(round(n/n_tot*100))
+                    true_perc = n/n_tot*100
+                    perc = int(round(n/n_tot*50))
                     
-                    print("\r[" + "#"*perc + " "*(100-perc) + "]   " + str(perc)+"% done", end='')
-    
+                    time_passed = actual_time-start
+                    time_rem = time_passed/true_perc*100 - time_passed
+                    
+                    print("\r[" + "#"*perc + " "*(50-perc) + "]  " + str(round(true_perc, 3))+"% done, "+str(round(time_rem, 2))+" seconds remaining", end='')
+                    
+    print("\nDone")
     return np.divide(Q_out, n)
     
     
