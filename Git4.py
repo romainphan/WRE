@@ -10,6 +10,8 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings("error")
 # import scipy as scipy
 # from scipy import optimize
 # import scipy.misc
@@ -170,9 +172,13 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         If you feel anything is missing in this description, please add it !
     """
     
-    # Verify that the inputs are correct
-    #assert type(n_years)=='int', "the number of years is not an integer"
-    # ...
+    # Verify that the inputs' length are correct
+    if len(P) != 365 * 24 * n_years:
+        print("Warning !The precipitation file is too long for the number of years indicated.\
+              Truncating the file to the correct length")
+        P = P[:365*24*n_years].copy()
+    
+    
     
     # initalize the output vectors
     n_steps = n_years * 365 * 24
@@ -184,6 +190,8 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     ET = Q.copy()
     
     # and also :
+    global q_sup
+    global q_sub
     q_sup = Q.copy()
     q_sub = Q.copy()
     
@@ -206,7 +214,14 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         ET[t] = f_ET(t, s[t])        #[mm/h]
         
         # Leaching
-        L[t] = K_sat * s[t]**c       # [mm/h]
+        try:
+            L[t] = K_sat * s[t]**c       # [mm/h]
+        except RuntimeWarning:
+            print("program has a problem with  L[t] = K_sat * s[t]**c       # [mm/h]")
+            print("L[t] = ", L[t])
+            print("K_sat = ", K_sat)
+            print("s[t] = ", s[t])
+            print("c = ", c)
         
         # euler integration :
         dt = 1    # [h]
@@ -214,6 +229,9 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         # soil moisture
         try :
             s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z)
+            
+            if s[t+1] < 0:
+                raise ValueError("Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
         except IndexError:
             break
         
@@ -226,8 +244,30 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     
     return [Q, R, I, s, L, ET]
 
+
+
+##############################################♀
+
+def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
+    out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years)
+    
+    s = out[3]
+    P_tot = np.sum(P)       # mm/h
+    R_tot = np.sum(out[1])
+    L_tot = np.sum(out[4])
+    ET_tot = np.sum(out[5])
+    q_sup_tot = np.sum(q_sup)
+    q_sub_tot = np.sum(q_sub)
+    
+    testS = P_tot / (ET_tot + R_tot + L_tot + n*z*(s[-1]-s[0]))
+    testQ = (P_tot - ET_tot) / (q_sub_tot + q_sup_tot + n*z*(s[-1]-s[0]) + q_sup[-1]*t_sup + q_sub[-1]*t_sub)
+    
+    return testS, testQ
+    
+    
+
 #print(1e-6*1000*3600)
-plt.plot(precipitation[0:int(len(precipitation)/5)])
+# plt.plot(precipitation[0:int(len(precipitation)/5)])
 
 # output = hydr_model(1e-7, c, t_sub, z, precipitation, K_c, 1)
 
@@ -273,6 +313,10 @@ s_z=np.std(z_MC)
     #NS=1-(sum((Q_obs(t)-Q_mod)^2)/(sum(Q_obs(t)-Q_obs_pred)^2))
 
 
+global theta_minmax
+global theta_avg
+global theta_var
+
 c_r = 1/1200        # cooling rate
 theta_old = [K_sat, c, t_sub, z]  # initial values of the parameters
 theta_new = theta_old.copy()
@@ -290,6 +334,7 @@ Q_mod_sum = Q_mod_avg.copy()
 
 
 def T_SA(i):
+    global c_r
     return np.exp(-c_r*i)
 
 def NS(Q):
@@ -299,30 +344,48 @@ def NS(Q):
     # print(np.diff(Q, Q_obs))
     # print(np.diff(Q, Q_mod_avg))
     # print(Q)
-    return 1 - np.sum((np.subtract(Q, Q_obs))**2)/np.sum((np.subtract(Q, Q_mod_avg))**2)
+    a = np.sum(  np.power(  np.subtract(Q, Q_obs) , 2)   )
+    b = np.sum(  np.power(  np.subtract(Q, Q_mod_avg) , 2)  )
+    
+    # print("    a = ", a)
+    # print("    b = ", b)
+    
+    try:
+        ans = 1 - a/b
+    except:
+        ans = float("-inf")
+    return ans
+    
 
-def opt_param(print_progress = False):
+def opt_param():
 
     global theta_old
     global Q_mod_sum
     global Q_mod_avg
-        
+    global theta_absolute_max
+    global ns_absolute_max
+    
+    Q_mod_avg = [0 for i in Q_obs]
+    Q_mod_sum = Q_mod_avg.copy()
+    
 
-
-    ns_old = 0      # value of the NS coefficient
+    ns_old = float("-inf")      # value of the NS coefficient
     ns_new = 0
     n_sim = 0       # nb of simulations yet
     seuil = 0.87    # seuil pour le NS coeff  
     iteration_max = 1e3
-    iteration = 0
-    theta_absolute_max = [0, 0, 0, 0]
-    ns_absolute_max = -10
+    try :
+        theta_old = theta_absolute_max.copy()
+    except NameError:
+        theta_absolute_max = [0, 0, 0, 0]
+    ns_absolute_max = float('-inf')
     
     
     print("Seuil choisi de : ", seuil)
     
     while ns_old < seuil:
         
+        # print(n_sim)
         # generate new parameters
         for i in range(4):
             keep_gen = True
@@ -334,10 +397,9 @@ def opt_param(print_progress = False):
                 
                 if theta_new[i] > theta_minmax[i][0] and theta_new[i] < theta_minmax[i][1]:
                     keep_gen = False
-                elif n>n_limit:
+                elif n_actual>n_limit:
                     keep_gen = False
-                    if print_progress:
-                        print("\nLimite de la boucle dépassée pour la génération des nuveaux paramètres")
+                    print("\nLimite de la boucle dépassée pour la génération des nouveaux paramètres")
                 
     
         
@@ -352,30 +414,86 @@ def opt_param(print_progress = False):
         # print(ns_old)
         
         if ns_new > ns_absolute_max:
+            print("\n    NS maximum absolu amélioré (iteration " + str(n_sim) + ")")
+            print("    NS_max_absolu = ", ns_new)
             theta_absolute_max = theta_new.copy()
             ns_absolute_max = ns_new
         
         if ns_new > ns_old:
-            if print_progress:
-                print("\nValeur de NS améliorée !")
-                print("NS = ", ns_new)
+            print("\nValeur de NS améliorée (iteration " + str(n_sim) + ")")
+            print("NS = ", ns_new)
             theta_old = theta_new.copy()
             ns_old = ns_new
         
-        elif np.random.uniform() < np.exp((ns_new-ns_old)/T_SA(n_sim)):
-            if print_progress:
-                print("\nOn va voir ailleurs !")
+        elif np.random.uniform() < np.exp(-abs(ns_new-ns_old)/T_SA(n_sim)):
+            print("\nOn va voir ailleurs (iteration " + str(n_sim) + ")")
+            print("NS = ", ns_new)
             
             theta_old = theta_new.copy()
             ns_old = ns_new
         
-        iteration += 1
-        if iteration > iteration_max:
-            if print_progress:
-                print("Iterations maximales dépassées pour la boucle principale")
+        if n_sim > iteration_max:
+            print("Iterations maximales dépassées pour la boucle principale")
             break
         
-    return theta_old, ns_absolute_max, theta_absolute_max
+    return theta_absolute_max
+
+
+
+def find_Q_mean(n_div):
+    """
+    Tries to find the value Q_mean necessary for the estimation of the NS indicator.
+    cuts each interval of the parameters (theta) into the number of divisions indicated
+    """
+    
+    theta_incr = [(x[1]-x[0]) /n_div for x in theta_minmax]
+    
+    Q_out = []
+    n = 0
+    n_tot = (n_div)**4
+    
+    
+    val_1 = theta_minmax[1][0]
+    val_2 = theta_minmax[2][0]
+    val_3 = theta_minmax[3][0]
+    
+    print("Beginning calculations...\n")
+    
+    for i in range(n_div+1):
+        val_0 = theta_minmax[0][0] + i*theta_incr[0]
+        
+        for j in range(n_div+1):
+            val_1 = theta_minmax[1][0] + i*theta_incr[1]
+            
+            for k in range(n_div+1):
+                val_2 = theta_minmax[2][0] + i*theta_incr[2]
+                
+                for m in range(n_div+1):
+                    val_3 = theta_minmax[3][0] + i*theta_incr[3]
+                    
+                
+                    
+                    Q_sim = hydr_model(val_0, val_1, val_2, val_3, precipitation, K_c, 6)[0]
+                   
+                    Q_out = np.sum(Q_out, Q_sim)
+                    n += 1
+                    
+                    perc = int(round(n/n_tot*100))
+                    
+                    print("\r[" + "#"*perc + " "*(100-perc) + "]   " + str(perc)+"% done", end='')
+    
+    return np.divide(Q_out, n)
+    
+    
+
+
+
+# return  1 - np.sum(np.power(np.subtract(Q, Q_obs),2)) / np.sum(np.power(np.subtract(Q, Q_mod_avg), 2))
+
+
+# Q = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
+
+
 
 
 
