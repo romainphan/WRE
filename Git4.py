@@ -10,9 +10,8 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import warnings
-warnings.filterwarnings("error")
-import time
+# import warnings
+# warnings.filterwarnings("error")
 # import scipy as scipy
 # from scipy import optimize
 # import scipy.misc
@@ -330,8 +329,7 @@ theta_minmax = [[1e-7, 1e-5],
                 [1, 2000]]      # min/max values of the parameters
 theta_avg = [np.mean(i) for i in theta_minmax]  # average values of the parameters
 theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
-Q_mod_avg = [0 for i in Q_obs]
-Q_mod_sum = Q_mod_avg.copy()
+Q_avg = [np.mean(Q_obs) for i in Q_obs]
 
 
 
@@ -342,14 +340,14 @@ def T_SA(i):
     return np.exp(-c_r*i)
 
 def NS(Q):
-    global Q_mod_avg
+    global Q_avg
     global Q_obs
     # print(Q, Q_obs, Q_mod_avg)
     # print(np.diff(Q, Q_obs))
     # print(np.diff(Q, Q_mod_avg))
     # print(Q)
     a = np.sum(  np.power(  np.subtract(Q, Q_obs) , 2)   )
-    b = np.sum(  np.power(  np.subtract(Q, Q_mod_avg) , 2)  )
+    b = np.sum(  np.power(  np.subtract(Q, Q_avg) , 2)  )
     
     # print("    a = ", a)
     # print("    b = ", b)
@@ -369,9 +367,6 @@ def opt_param():
     global theta_absolute_max
     global ns_absolute_max
     
-    Q_mod_avg = [0 for i in Q_obs]
-    Q_mod_sum = Q_mod_avg.copy()
-    
 
     ns_old = float("-inf")      # value of the NS coefficient
     ns_new = 0
@@ -388,7 +383,7 @@ def opt_param():
     print("Seuil choisi de : ", seuil)
     
     while ns_old < seuil:
-        
+        n_sim += 1
         # print(n_sim)
         # generate new parameters
         for i in range(4):
@@ -408,9 +403,6 @@ def opt_param():
     
         
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
-        Q_mod_sum  = np.add(Q_mod_sum, Q_mod)
-        n_sim += 1
-        Q_mod_avg = np.divide(Q_mod_sum, n_sim)
         ns_new = NS(Q_mod)
         
         # print(ns_new)
@@ -444,56 +436,6 @@ def opt_param():
 
 
 
-def find_Q_mean(n_div):
-    """
-    Tries to find the value Q_mean necessary for the estimation of the NS indicator.
-    cuts each interval of the parameters (theta) into the number of divisions indicated
-    """
-    
-    theta_incr = [(x[1]-x[0]) /n_div for x in theta_minmax]
-    
-    Q_out = [0 for i in range(52560)]
-    n = 0
-    n_tot = (n_div+1)**4
-    
-    
-    val_1 = theta_minmax[1][0]
-    val_2 = theta_minmax[2][0]
-    val_3 = theta_minmax[3][0]
-    
-    print("Beginning calculations...\n")
-    start = time.time()
-    
-    for i in range(n_div+1):
-        val_0 = theta_minmax[0][0] + i*theta_incr[0]
-        
-        for j in range(n_div+1):
-            val_1 = theta_minmax[1][0] + i*theta_incr[1]
-            
-            for k in range(n_div+1):
-                val_2 = theta_minmax[2][0] + i*theta_incr[2]
-                
-                for m in range(n_div+1):
-                    val_3 = theta_minmax[3][0] + i*theta_incr[3]
-                    
-                
-                    
-                    Q_sim = hydr_model(val_0, val_1, val_2, val_3, precipitation, K_c, 6)[0]
-                   
-                    Q_out = np.add(Q_out, Q_sim)
-                    n += 1
-                    actual_time = time.time()
-                    
-                    true_perc = n/n_tot*100
-                    perc = int(round(n/n_tot*50))
-                    
-                    time_passed = actual_time-start
-                    time_rem = time_passed/true_perc*100 - time_passed
-                    
-                    print("\r[" + "#"*perc + " "*(50-perc) + "]  " + str(round(true_perc, 3))+"% done, "+str(round(time_rem, 2))+" seconds remaining", end='')
-                    
-    print("\nDone")
-    return np.divide(Q_out, n)
     
     
 
