@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("error")
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 # import scipy as scipy
 # from scipy import optimize
 # import scipy.misc
@@ -218,7 +219,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         # le programme a ce moment
         try:
             L[t] = K_sat * s[t]**c       # [mm/h]
-        except RuntimeWarning:
+        except:
             print("program has a problem with  L[t] = K_sat * s[t]**c       # [mm/h]")
             print("L[t] = ", L[t])
             print("K_sat = ", K_sat)
@@ -235,7 +236,12 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             if s[t+1] < 0:
                 print("\nWARNING !")
                 print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
-                print("    Setting it to 0\n")
+                ans = input("Ignore and set value to 0 ? [y] / [n] ")
+                if ans == "y":
+                    print("    Setting value to 0\n")
+                elif ans == "n":
+                    print("Aborting...")
+                    raise ValueError("The value of the soil moisture is negative !")
                 s[t+1] = 0
         except IndexError:
             break
@@ -248,6 +254,53 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         Q[t+1] = A * (q_sup[t+1] + q_sub[t+1])/1000/3600 + Q_b
     
     return [Q, R, I, s, L, ET]
+
+
+##################################################
+
+
+
+def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0):
+    """
+    plots the outputs of the hydrological model using the same parameters.
+    
+    Inputs :
+        - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
+        - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
+        - t_sub [h] is the mean sub-superficial residence time (free parameter)
+        - z [m] is the root zone thickness (free parameter)
+        - P [mm/h] is the hourly precipitation, is a vector !
+        - K_c [-] is the crop coefficient representative of the whole area
+        - n_years [years] is the number of years to process 
+    Optional :
+        - s_0 [-] soil moisture at time t=0. Defaults to 0.
+        - V_sup_0 [m3] Superficial volume of water at time t=0. Defaults to 0.
+        - V_sub_0 [m3] Sub-superficial volume of water at time t=0. Defaults to 0.
+    
+    Output (plots) :
+        - Q [m3/s] the total discharge 
+        - R [mm/h] the runoff         -> possible to change unit if not convenient
+        - I [mm/h] the infiltration   -> possible to change unit if not convenient
+        - s [-] the soil saturation
+        - L [mm/h] the leaching       -> possible to change unit if not convenient
+        - ET [mm/h] the actual evapotranspiration
+    """
+
+    out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0, V_sup_0, V_sub_0)
+    
+    lines = 2
+    col = 3
+    
+    fig, axs = plt.subplots(lines, col)
+    titres = ["Discharge [m3/s]", "R [mm/h]", "I [mm/h]", "s [-]", "L [mm/h]", "ET [mm/h]"]
+    
+    for i in range(lines):
+        for j in range(col):
+            axs[i, j].plot(out[j+3*i])
+            axs[i, j].set_title(titres[j+3*i])
+    
+    plt.show()
+    return None
 
 
 
