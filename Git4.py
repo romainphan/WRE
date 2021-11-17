@@ -10,8 +10,8 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-# import warnings
-# warnings.filterwarnings("error")
+import warnings
+warnings.filterwarnings("error")
 # import scipy as scipy
 # from scipy import optimize
 # import scipy.misc
@@ -214,6 +214,8 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         ET[t] = f_ET(t, s[t])        #[mm/h]
         
         # Leaching
+        # parfois le programme s'arrête, la suite est pour stopper proprement
+        # le programme a ce moment
         try:
             L[t] = K_sat * s[t]**c       # [mm/h]
         except RuntimeWarning:
@@ -231,9 +233,9 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z)
             
             if s[t+1] < 0:
-                # print("\nWARNING !")
-                # print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
-                # print("    Setting it to 0")
+                print("\nWARNING !")
+                print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
+                print("    Setting it to 0\n")
                 s[t+1] = 0
         except IndexError:
             break
@@ -336,10 +338,17 @@ Q_avg = [np.mean(Q_obs) for i in Q_obs]
 
 
 def T_SA(i):
+    """
+    fonction qui calcule la 'temperature liee a l'algorithme pour savoir si on
+    va voir ailleurs
+    """
     global c_r
     return np.exp(-c_r*i)
 
 def NS(Q):
+    """
+    indicateur de proximité du Q en entree avec le Q observe (en donnee de l'exo)
+    """
     global Q_avg
     global Q_obs
     # print(Q, Q_obs, Q_mod_avg)
