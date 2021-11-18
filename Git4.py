@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
+import random as rd
 warnings.filterwarnings("error")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # import scipy as scipy
@@ -72,7 +73,7 @@ month_start=month_end-day_month+1
 #Thornthwaite equation
 lat = phi                     #latitude of the site (degrees)
 D = [k for k in range(365)]   #day of the year   
-delta = [0.409*np.sin(2*np.pi*d/365-1.39)for d in D]          # [-]
+delta = [0.409*np.sin(2*np.pi*d/365-1.39) for d in D]          # [-]
 omega_s = [np.arccos(-np.tan(lat*np.pi/180)*np.tan(i)) for i in delta]   # [rad]
 N_D = [24*o/np.pi for o in omega_s]                   # [h] number of daylight hours of day d
 
@@ -83,6 +84,8 @@ a = 6.75e-7 * Ii**3 - 7.71e-5 * Ii**2 + 1.79e-2 * Ii + 0.49           # experime
 # monthly average potential evapotranspiration :
 ET_0 = [16*N_m[i] / 12 * (10*T_m[i]/Ii)**a / (24*day_month[i]) for i in range(12)]  # [mm/h]
 
+
+##########################################"
 
 def month(t):
     """
@@ -130,6 +133,33 @@ def f_ET(t,s):
     else:
         return ET_0[m] * K_c[m]
     
+    
+################################
+
+def downscaling(Pdaily):
+    """
+    Downscale daily precipitation to hourly precipitation assuming that hourly
+    rainfall are exponentially distributed.
+
+    INPUT
+    "Pdaily": precipitation at daily timestep
+
+    OUTPUT
+    "Phourly": precipitation at hourly time step 
+
+    if "Pdaily" is in [mm/day], "Phourly" is in [mm/h]     
+
+    """
+
+    Phourly = np.empty((len(Pdaily)*24,))
+    for i in range(len(Pdaily)):
+        print(i)
+        distr = -np.log(np.random.rand(24,))
+        sumdistr = np.sum(distr)
+        Phourly[i*24:(i+1)*24] = Pdaily[i]*distr/sumdistr
+
+    return Phourly    
+
 
 ################################
 
@@ -179,7 +209,8 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
               Truncating the file to the correct length")
         P = P[:365*24*n_years].copy()
     
-    
+    # count the number of errors
+    error_count = 0
     
     # initalize the output vectors
     n_steps = n_years * 365 * 24
@@ -225,6 +256,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             print("K_sat = ", K_sat)
             print("s[t] = ", s[t])
             print("c = ", c)
+            error_count += 1
         
         # euler integration :
         dt = 1    # [h]
@@ -234,15 +266,19 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n*z)
             
             if s[t+1] < 0:
-                print("\nWARNING !")
-                print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
-                ans = input("Ignore and set value to 0 ? [y] / [n] ")
-                if ans == "y":
-                    print("    Setting value to 0\n")
-                elif ans == "n":
-                    print("Aborting...")
-                    raise ValueError("The value of the soil moisture is negative !")
+                # print("\nWARNING !")
+                # print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
+                # ans = input("Ignore and set value to 0 ? [y] / [n] ")
+                # if ans == "y":
+                #     print("    Setting value to 0\n")
+                # elif ans == "n":
+                #     print("Aborting...")
+                #     raise ValueError("The value of the soil moisture is negative !")
                 s[t+1] = 0
+                error_count += 1
+            elif s[t+1] > 1:
+                s[t+1] = 1
+                error_count += 1
         except IndexError:
             break
         
@@ -323,71 +359,17 @@ def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
     return testS, testQ
     
     
-
-#print(1e-6*1000*3600)
-# plt.plot(precipitation[0:int(len(precipitation)/5)])
-
-# output = hydr_model(1e-7, c, t_sub, z, precipitation, K_c, 1)
-
-
-# for i in range(6):
-#     plt.figure()
-#     plt.plot(output[i])
-#     plt.show()
-    
+#########################################
 
 
 
-
-## Part 2 
-# gamma=9806*10**(-9)  #[N/mm^3]
-# eta=0.8     #turbine efficiency [-]
-# delta_z=100*10**(3) #[mm]
-
-# def P(Q): 
-#     return (eta*gamma*delta_z*Q)-(eta*gamma*K_sat*10**(3)*(Q**3))   #
-# print(scipy.misc.derivative(P,0))
-# Q_obs_pred=scipy.misc.derivative(P,0)
-
-N_inter = 52560
-K_sat_MC=np.zeros(N_inter)
-c_MC=np.zeros(N_inter)
-t_sub_MC=np.zeros(N_inter)
-z_MC=np.zeros(N_inter)
-NS=np.zeros(N_inter)
-
-K_sat_MC[0]=K_sat
-c_MC[0]=c
-t_sub_MC[0]=t_sub
-z_MC[0]=z
-
-s_K_sat=np.std(K_sat_MC)
-s_c=np.std(c_MC)
-s_t_sub=np.std(t_sub_MC)
-s_z=np.std(z_MC)
-
-#Q_mod=
-#for t in range (52560):
-    #NS=1-(sum((Q_obs(t)-Q_mod)^2)/(sum(Q_obs(t)-Q_obs_pred)^2))
+# Define new parameters for the parameter optimization
 
 
-global theta_minmax
-global theta_avg
-global theta_var
-
-c_r = 1/1200        # cooling rate
-theta_old = [K_sat, c, t_sub, z]  # initial values of the parameters
-theta_new = theta_old.copy()
-theta_minmax = [[1e-7, 1e-5], 
-                [1, 20],
-                [1, 400],
-                [1, 2000]]      # min/max values of the parameters
-theta_avg = [np.mean(i) for i in theta_minmax]  # average values of the parameters
-theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
 Q_avg = [np.mean(Q_obs) for i in Q_obs]
 
-
-
+theta_absolute_max = [5e-6, 10, 200, 1000]
+ns_absolute_max = float('-inf')
 
 
 def T_SA(i):
@@ -395,19 +377,20 @@ def T_SA(i):
     fonction qui calcule la 'temperature liee a l'algorithme pour savoir si on
     va voir ailleurs
     """
-    global c_r
+    c_r = 1/1200        # cooling rate
     return np.exp(-c_r*i)
 
 def NS(Q):
     """
     indicateur de proximité du Q en entree avec le Q observe (en donnee de l'exo)
     """
-    global Q_avg
-    global Q_obs
     # print(Q, Q_obs, Q_mod_avg)
     # print(np.diff(Q, Q_obs))
     # print(np.diff(Q, Q_mod_avg))
     # print(Q)
+    global Q_obs
+    global Q_avg
+    
     a = np.sum(  np.power(  np.subtract(Q, Q_obs) , 2)   )
     b = np.sum(  np.power(  np.subtract(Q, Q_avg) , 2)  )
     
@@ -419,30 +402,34 @@ def NS(Q):
     except:
         ans = float("-inf")
     return ans
+
+
+def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     
-
-def opt_param():
-
-    global theta_old
-    global Q_mod_sum
-    global Q_mod_avg
+    global Q_obs
     global theta_absolute_max
     global ns_absolute_max
     
-
+    theta_old = theta_start.copy()  # initial values of the parameters
+    theta_new = theta_old.copy()
+    theta_minmax = [[1e-7, 1e-5], 
+                    [1, 20],
+                    [1, 400],
+                    [1, 2000]]      # min/max values of the parameters
+    theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
+    
+    
+    
+    # parameters
     ns_old = float("-inf")      # value of the NS coefficient
     ns_new = 0
     n_sim = 0       # nb of simulations yet
     seuil = 0.87    # seuil pour le NS coeff  
     iteration_max = 1e3
-    try :
-        theta_old = theta_absolute_max.copy()
-    except NameError:
-        theta_absolute_max = [0, 0, 0, 0]
-    ns_absolute_max = float('-inf')
-    
-    
     print("Seuil choisi de : ", seuil)
+    
+    print("Starting parameters : ", theta_old)
+    
     
     while ns_old < seuil:
         n_sim += 1
@@ -450,20 +437,12 @@ def opt_param():
         # generate new parameters
         for i in range(4):
             keep_gen = True
-            n_limit = 100
-            n_actual = 0
             while keep_gen: 
-                n_actual += 1
                 theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
                 
                 if theta_new[i] > theta_minmax[i][0] and theta_new[i] < theta_minmax[i][1]:
                     keep_gen = False
-                elif n_actual>n_limit:
-                    keep_gen = False
-                    print("\nLimite de la boucle dépassée pour la génération des nouveaux paramètres")
-                
-    
-        
+               
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
         ns_new = NS(Q_mod)
         
@@ -474,6 +453,7 @@ def opt_param():
         if ns_new > ns_absolute_max:
             print("\n    NS maximum absolu amélioré (iteration " + str(n_sim) + ")")
             print("    NS_max_absolu = ", ns_new)
+            print("    Paramètres : ", np.round(theta_absolute_max, decimals=3))
             theta_absolute_max = theta_new.copy()
             ns_absolute_max = ns_new
         
@@ -499,14 +479,28 @@ def opt_param():
 
 
     
+############################################
+
+lambda_ = 3
+
+def rain_gen(years=100):
+    global alpha
+    global lambda_
     
-
-
-
-# return  1 - np.sum(np.power(np.subtract(Q, Q_obs),2)) / np.sum(np.power(np.subtract(Q, Q_mod_avg), 2))
-
-
-# Q = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
+    output = [0 for i in range(365*years)]
+    total_day = 0
+    
+    for y in range(years):
+        for m in range(12):
+            for d in range(day_month[m]):
+                
+                # Does it rain ?
+                if rd.random() < lambda_[m]:
+                    output[total_day] = rd.expovariate(1/alpha[m])
+                total_day += 1
+    
+    return output
+    
 
 
 
