@@ -22,8 +22,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 dirname = os.path.dirname(__file__)
 
-
-# mean monthly temperature [C]
+# meanget monthly temperature [C]
 temperature= pd.read_csv(dirname+"/temperature.txt")
 T_m=temperature.T.to_numpy()[0]
 
@@ -153,7 +152,7 @@ def downscaling(Pdaily):
 
     Phourly = np.empty((len(Pdaily)*24,))
     for i in range(len(Pdaily)):
-        print(i)
+        #print(i)
         distr = -np.log(np.random.rand(24,))
         sumdistr = np.sum(distr)
         Phourly[i*24:(i+1)*24] = Pdaily[i]*distr/sumdistr
@@ -477,15 +476,57 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     return theta_absolute_max
 
 
-
+#########################################
+#alpha lambda
+def parametres():
+    precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
+    n_r1=[0]*72
+    I_r1=[0]*72
+   
+    jour=0
+    for i in range (0,72):
+        n=0
+        I=0
+        m=144%12
+        for k in range (jour,jour+day_month[m]):
+            
+            if precipitationj[k]!=0:
+                n=n+1
+                I=I+precipitationj[k]
+            n_r1[i]=n
+            I_r1[i]=I
+        jour=jour+day_month[m]-1
+    
+    n_rainy=[0]*12
+    I_rainy=[0]*12
+    for i in range (0,12):
+        n=0
+        I=0
+        for j in range (0,6):
+            n=n+n_r1[j*12+i]
+            I=I+I_r1[j*12+i]
+        n_rainy[i]=n
+        I_rainy[i]=I
+        
+    lambda_=[0]*12
+    alpha=[0]*12
+    
+    for i in range(0,12):
+        lambda_[i]=n_rainy[i]/(day_month[i]*6)
+        alpha[i]=I_rainy[i]/n_rainy[i]
+        
+    return (lambda_,alpha)
+    
+    
     
 ############################################
 
-lambda_ = 3
+
 
 def rain_gen(years=100):
-    global alpha
-    global lambda_
+    
+    lambda_,alpha=parametres()
+    
     
     output = [0 for i in range(365*years)]
     total_day = 0
@@ -498,12 +539,42 @@ def rain_gen(years=100):
                 if rd.random() < lambda_[m]:
                     output[total_day] = rd.expovariate(1/alpha[m])
                 total_day += 1
+                
     
-    return output
+    return downscaling(output)
     
+#########################################☻
+def rain_gen2(years=100):
+    
+    lambda_,alpha=parametres()
+    
+    
+  
+    output = [0 for i in range(365*years)]
+    total_day = 0
 
-
-
+    
+    for y in range(years):
+        for m in range(12):
+            day_rain=0
+            I=0
+            for d in range(day_month[m]):
+                
+                # Does it rain ?
+                if rd.random() < lambda_[m]:
+                    output[total_day] = rd.expovariate(1/alpha[m])
+                    I=I+output[total_day]
+                    day_rain=day_rain+1
+                total_day += 1
+                
+    mois=[[]]*12
+    for i in range (0,years):
+        for m in range (0,12):
+            mois[m]=mois[m]+[output[i*365+month_start[m]:i*365+month_end[m]]]
+    moyenne=[np.mean(mois[m]) for m in range (0,12)]
+    standard= [np.std(mois[m])for m in range(0,12)]
+    
+    return (downscaling(output),moyenne,standard)
 
 
 
