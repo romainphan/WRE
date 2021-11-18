@@ -326,13 +326,14 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     lines = 2
     col = 3
     
-    fig, axs = plt.subplots(lines, col)
+    fig, axs = plt.subplots(lines, col,figsize=(20,10))
     titres = ["Discharge [m3/s]", "R [mm/h]", "I [mm/h]", "s [-]", "L [mm/h]", "ET [mm/h]"]
     
     for i in range(lines):
         for j in range(col):
+            plt.subplots_adjust(hspace =0.3,wspace=0.2)
             axs[i, j].plot(out[j+3*i])
-            axs[i, j].set_title(titres[j+3*i])
+            axs[i, j].set_title(titres[j+3*i],fontsize=20)
     
     plt.show()
     return None
@@ -478,21 +479,22 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
 
 #########################################
 #alpha lambda
-def parametres():
-    precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
-    n_r1=[0]*72
-    I_r1=[0]*72
+precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
+
+def parametres(precip,year=6):
+    n_r1=[0]*year*12
+    I_r1=[0]*year*12
    
     jour=0
-    for i in range (0,72):
+    for i in range (0,year*12):
         n=0
         I=0
         m=144%12
         for k in range (jour,jour+day_month[m]):
             
-            if precipitationj[k]!=0:
+            if precip[k]!=0:
                 n=n+1
-                I=I+precipitationj[k]
+                I=I+precip[k]
             n_r1[i]=n
             I_r1[i]=I
         jour=jour+day_month[m]-1
@@ -523,9 +525,9 @@ def parametres():
 
 
 
-def rain_gen(years=100):
+def rain_gen(years=100,plot=True):
     
-    lambda_,alpha=parametres()
+    lambda_,alpha=parametres(precipitationj)
     
     
     output = [0 for i in range(365*years)]
@@ -539,42 +541,29 @@ def rain_gen(years=100):
                 if rd.random() < lambda_[m]:
                     output[total_day] = rd.expovariate(1/alpha[m])
                 total_day += 1
-                
-    
-    return downscaling(output)
+    if plot:
+        moy,std=parametres(output,100)
+        figure=plt.figure(figsize=(30,10))
+        
+        plt.subplot(1,2,1)
+        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        ax=plt.gca()
+        plt.plot(lambda_,marker='o',label="lambda")
+        plt.plot(moy,marker='o',label="mean")
+        ax.set_title("Lambda",fontsize=30)
+        ax.legend()
+        
+        plt.subplot(1,2,2)
+        ax=plt.gca()
+        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.plot(alpha,marker='o',label="alpha")
+        plt.plot(std,marker='o',label="deviation")
+        ax.set_title("Alpha",fontsize=30)
+        ax.legend()
+    return (downscaling(output))
     
 #########################################☻
-def rain_gen2(years=100):
-    
-    lambda_,alpha=parametres()
-    
-    
-  
-    output = [0 for i in range(365*years)]
-    total_day = 0
 
-    
-    for y in range(years):
-        for m in range(12):
-            day_rain=0
-            I=0
-            for d in range(day_month[m]):
-                
-                # Does it rain ?
-                if rd.random() < lambda_[m]:
-                    output[total_day] = rd.expovariate(1/alpha[m])
-                    I=I+output[total_day]
-                    day_rain=day_rain+1
-                total_day += 1
-                
-    mois=[[]]*12
-    for i in range (0,years):
-        for m in range (0,12):
-            mois[m]=mois[m]+[output[i*365+month_start[m]:i*365+month_end[m]]]
-    moyenne=[np.mean(mois[m]) for m in range (0,12)]
-    standard= [np.std(mois[m])for m in range(0,12)]
-    
-    return (downscaling(output),moyenne,standard)
 
 
 
