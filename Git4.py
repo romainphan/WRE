@@ -366,7 +366,6 @@ def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
 # Define new parameters for the parameter optimization
 
 
-Q_avg = [np.mean(Q_obs) for i in Q_obs]
 
 theta_absolute_max = [5e-6, 10, 200, 1000]
 ns_absolute_max = float('-inf')
@@ -380,28 +379,16 @@ def T_SA(i):
     c_r = 1/1200        # cooling rate
     return np.exp(-c_r*i)
 
-def NS(Q):
+def NS(Q, Q_observed, Q_averaged):
     """
     indicateur de proximité du Q en entree avec le Q observe (en donnee de l'exo)
     """
-    # print(Q, Q_obs, Q_mod_avg)
-    # print(np.diff(Q, Q_obs))
-    # print(np.diff(Q, Q_mod_avg))
-    # print(Q)
-    global Q_obs
-    global Q_avg
+    # ne semble pas avoir de pb 
     
-    a = np.sum(  np.power(  np.subtract(Q, Q_obs) , 2)   )
-    b = np.sum(  np.power(  np.subtract(Q, Q_avg) , 2)  )
+    a = np.sum(  np.power(  np.subtract(Q, Q_observed) , 2)   )
+    b = np.sum(  np.power(  np.subtract(Q, Q_averaged) , 2)  )
     
-    # print("    a = ", a)
-    # print("    b = ", b)
-    
-    try:
-        ans = 1 - a/b
-    except:
-        ans = float("-inf")
-    return ans
+    return 1 - a/b
 
 
 def opt_param(theta_start = [5e-6, 10, 200, 1000]):
@@ -409,6 +396,9 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     global Q_obs
     global theta_absolute_max
     global ns_absolute_max
+    global NS_out
+    
+    Q_avg = [np.mean(Q_obs) for i in Q_obs]
     
     theta_old = theta_start.copy()  # initial values of the parameters
     theta_new = theta_old.copy()
@@ -422,17 +412,17 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     
     # parameters
     ns_old = float("-inf")      # value of the NS coefficient
-    ns_new = 0
     n_sim = 0       # nb of simulations yet
     seuil = 0.87    # seuil pour le NS coeff  
-    iteration_max = 1e3
+    iteration_max = 2e4
+    NS_out = np.zeros(int(iteration_max))
     print("Seuil choisi de : ", seuil)
     
     print("Starting parameters : ", theta_old)
     
     
     while ns_old < seuil:
-        n_sim += 1
+        
         # print(n_sim)
         # generate new parameters
         for i in range(4):
@@ -440,32 +430,33 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
             while keep_gen: 
                 theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
                 
-                if theta_new[i] > theta_minmax[i][0] and theta_new[i] < theta_minmax[i][1]:
+                if theta_new[i] >= theta_minmax[i][0] and theta_new[i] <= theta_minmax[i][1]:
                     keep_gen = False
                
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
-        ns_new = NS(Q_mod)
+        ns_new = NS(Q_mod, Q_obs, Q_avg)
+        NS_out[n_sim] = ns_new
         
         # print(ns_new)
         # print("#"*50)
         # print(ns_old)
         
         if ns_new > ns_absolute_max:
-            print("\n    NS maximum absolu amélioré (iteration " + str(n_sim) + ")")
-            print("    NS_max_absolu = ", ns_new)
-            print("    Paramètres : ", np.round(theta_absolute_max, decimals=3))
+            print("\n    NS maximum absolu amélioré     (iteration " + str(n_sim) + ")")
+            print("    NS_max_absolu = ", round(ns_new, ndigits=3))
+            print("    Paramètres : ", np.round(theta_absolute_max, decimals=8))
             theta_absolute_max = theta_new.copy()
             ns_absolute_max = ns_new
         
         if ns_new > ns_old:
-            print("\nValeur de NS améliorée (iteration " + str(n_sim) + ")")
-            print("NS = ", ns_new)
+            print("\nValeur de NS améliorée     (iteration " + str(n_sim) + ")")
+            print("NS = ", round(ns_new, ndigits=3))
             theta_old = theta_new.copy()
             ns_old = ns_new
         
         elif np.random.uniform() < np.exp(-abs(ns_new-ns_old)/T_SA(n_sim)):
-            print("\nOn va voir ailleurs (iteration " + str(n_sim) + ")")
-            print("NS = ", ns_new)
+            print("\nOn va voir ailleurs        (iteration " + str(n_sim) + ")")
+            print("NS = ", round(ns_new, ndigits=3))
             
             theta_old = theta_new.copy()
             ns_old = ns_new
@@ -474,12 +465,25 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
             print("Iterations maximales dépassées pour la boucle principale")
             break
         
+        
+        n_sim += 1
+        
     return theta_absolute_max
 
 
 #########################################
 #alpha lambda
 precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
+
+
+# Valeur empirique trouvée par itération de l'algo
+best_param = [1.00000000e-07, 1.18112505e+01, 8.00374772e+01, 1.36199741e+03]
+
+# Valeur d'un groupe
+best = [1.224e-5, 6.8311, 64.5218, 581.1]
+
+
+
 
 def parametres(precip,year=6):
     n_r1=[0]*year*12
