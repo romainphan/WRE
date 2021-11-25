@@ -26,24 +26,24 @@ dirname = os.path.dirname(__file__)
 temperature= pd.read_csv(dirname+"/temperature.txt")
 T_m=temperature.T.to_numpy()[0]
 
-
 # hourly precipitation intensity [mm/h] for the period 01/01/2000 to 31/12/2005
 precipitation=pd.read_csv(dirname+"/P.txt").T.to_numpy()[0]
-
 
 # Changes in monthly temperature [degrees C]
 temperature_change= pd.read_csv(dirname+"/temperature_change.txt")
 T_c=temperature_change.T.to_numpy()[0]
 
-
 # monthly mean crop coefficient [-] (average among all the crops and soil uses of the basin
 cropcoeff=pd.read_csv(dirname+"/kc.txt")
 K_c=cropcoeff.T.to_numpy()[0]
 
-
 # instantaneous discharge at hourly time step [m3/s] for the period 01/01/2000 to 31/12/2004
 Q_obs=pd.read_csv(dirname+"/Q_obs.txt").T.to_numpy()[0]
 
+# Area rating curve
+# A_rating[0] = area [m2] at lake level 0m
+extract=pd.read_csv(dirname+"/area_rating_curve.txt").T.to_numpy()[0]
+A_rating = [int(ele[13:]) for ele in extract[1:]]
 
 # PARAMETERS
 s_w=0.25    # [-] Wilting point
@@ -204,7 +204,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     
     # Verify that the inputs' length are correct
     if len(P) != 365 * 24 * n_years:
-        print("Warning !The precipitation file is too long for the number of years indicated.\
+        print("Warning ! The precipitation file is too long for the number of years indicated.\
               Truncating the file to the correct length")
         P = P[:365*24*n_years].copy()
     
@@ -282,8 +282,8 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             break
         
         # q_sub & q_sup
-        q_sub[t+1] = q_sub[t] + dt/t_sub * (R[t] - q_sub[t])    #[mm/h]
-        q_sup[t+1] = q_sup[t] + dt/t_sup * (L[t] - q_sup[t])    #[mm/h]
+        q_sub[t+1] = q_sub[t] + dt/t_sub * (L[t] - q_sub[t])    #[mm/h]
+        q_sup[t+1] = q_sup[t] + dt/t_sup * (R[t] - q_sup[t])    #[mm/h]
         
         # Q
         Q[t+1] = A * (q_sup[t+1] + q_sub[t+1])/1000/3600 + Q_b
@@ -472,8 +472,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
 
 
 #########################################
-#alpha lambda
-precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
+
 
 
 # Valeur empirique trouvée par itération de l'algo
@@ -531,6 +530,8 @@ def parametres(precip,year=6):
 
 def rain_gen(years=100,plot=True):
     
+    #alpha lambda
+    precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
     lambda_,alpha=parametres(precipitationj)
     
     
@@ -570,4 +571,52 @@ def rain_gen(years=100,plot=True):
 
 
 
+def vol_rat_curve(area_rat_curve):
+    """
+    input : 
+        - a list of the area [m2] of the lake for each level [m] of the lake
+        area_rat_curve[i] should be equal to the area of the lake at height i meters
+    
+    Output : 
+        - a list of the same size of the input describing the volume [m3] for each
+        level. 
+        Out[i] is the volume [m3] if the lake is at height i [m]
+    """
+    
+    n = len(area_rat_curve)
+    ans = [0 for i in range(n)]
+    
+    for i in range(1,n):
+        ans[i] = (area_rat_curve[i-1] + area_rat_curve[i])/2 + ans[i-1]
+    
+    return ans
 
+#################################
+
+def lvl_to_vol(level, volume_rating_curve):
+    """
+    input :
+        - a level [m] at which we want to compute the volume. Can be a float.
+        - volume_rating_curve a list describing the volume [m3] for each level
+        volume_rating_curve[i] should be the volume at lake height i [m]
+    
+    Output :
+        - the volume [m3] at the desired lake height
+    """
+    
+    # partie entière
+    i = int(np.floor(level))
+    # partie décimale
+    dec = level - i
+    
+    # bornes de l'interpolation
+    a = volume_rating_curve[i]
+    b = volume_rating_curve[i+1]
+    
+    return a + (b-a)*dec
+    
+###########################################
+    
+    
+    
+    
