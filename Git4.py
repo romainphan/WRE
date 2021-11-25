@@ -63,7 +63,7 @@ K_sat_h = K_sat*3600  # [m/h] Saturated hydraulic conductivity
 c=10                # [-] exponent of ksat for the equation k = ksat * s^c
 t_sub=200            # [h] mean sub-superficial residence time
 z=1000               # [mm] root zone thickness
-
+Qcity=1              #[m3/s]
 day_month=[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] #"day_month": number of days for each month
 month_end=np.cumsum(day_month)-1                    #"month_end": last day of each month
 month_start=month_end-day_month+1
@@ -617,34 +617,23 @@ def lvl_to_vol(level, volume_rating_curve):
     
 
 ###########################################
-def minimum_flow(Q, plot=False):
-    sort_Q=sorted(Q,reverse=True)
-    
-    n=len(Q_obs)
-    p_exceedance=[k/n for k in range (1,n+1)]
-    
-    i=0
-    while p_exceedance[i]<0.95:
-        i=i+1
-    if plot:
-        plt.semilogy(p_exceedance,sort_Q)
-        plt.title("Discharge Duration Curve")
-        plt.plot(p_exceedance,[sort_Q[i]]*(n),color="red")
-    return sort_Q[i]
+
     
 ################################
 
-def Q_S(s,P,ET):
+def Q_S(P,ET):
+    
+    ## Return the discharge that need to supply the city and the crops in m3/h
     A_crop = 5  #[km^2]
-    etha_crop=0.8*60*60   #[m^3/h]
-    etha_p = 0.4*60*60    #[m^3/h]
+    etha_crop=0.8  
+    etha_p = 0.4
     n=len(P)
     Q_I=[0]*n
     Q_sup=[0]*n
     for i in range (0, n):
-        Q_I[i] = ((ET[i]*(1E-3))-(etha_p*P[i]*(1E-3)))*A_crop*(1E6)/etha_crop
+        Q_I[i] = max(((ET[i]*(1E-3))-(etha_p*P[i]*(1E-3)))*A_crop*(1E6)/etha_crop,0)
         
-    Q_city=[1*60*60]*n
+    Q_city=[Qcity*3600]*n       #[m3/h]
     
     for i in range (0,n):
         Q_sup[i]= Q_I[i] + Q_city[i]
@@ -652,7 +641,7 @@ def Q_S(s,P,ET):
 
 
  #############################################
-  ### storage equation
+
   
 def vol_to_lvl(volume, volume_rating_curve):
     """
@@ -675,3 +664,82 @@ def vol_to_lvl(volume, volume_rating_curve):
         if volume >= vrc[i] and volume <= vrc[i+1]:
             dec = (volume - vrc[i]) / (vrc[i+1] - vrc[i])
             return i+dec
+        
+#############################    Reservoir routing
+#parameters of the reservoir
+Cqg=0.7 #[•]
+Cqsp=0.6 #[]
+Lspill=140 #[m]
+p=19 #[m]  
+
+#parameters of power plant
+QT=30*3600 #[m/h]
+D=3.6 #m
+Lp= 1200 #[m]
+ks=0.5 #[mm]
+eta =0.75 #[] Careful, more than one eta
+Deltaz=75 #[m]
+lmin_HU=9 #[m]
+
+Qlim=100 #[m^3/s]
+g=9.81
+
+def Q_347(Q, plot=False):
+    # return the discharge that is exceed 95% of the time
+    # If plot== True, plot the discharge rating curve
+    sort_Q=sorted(Q,reverse=True)
+    
+    n=len(Q_obs)
+    p_exceedance=[k/n for k in range (1,n+1)]
+    
+    i=0
+    while p_exceedance[i]<0.95:
+        i=i+1
+    if plot:
+        plt.semilogy(p_exceedance,sort_Q)
+        plt.title("Discharge Duration Curve")
+        plt.plot(p_exceedance,[sort_Q[i]]*(n),color="red")
+    return sort_Q[i]
+
+
+
+############## MAIN
+# Reservoir routing
+def reservoir_(Q,P,ET,volume_rating_curve):
+    dt=1 #hour
+    # Variables
+    Q347=Q_347(Q,plot=False)*3600 ##CHECK UNITS
+    n=len(Q)
+    V=[0]*n  #m3
+    l=[0]*n     # m
+    A_sluice=[0]*n  #m2
+    Q_ind=Q_S(P,ET)     #m3/h
+    Q_out=[0]*n     #m3/h
+    Q_HU=[0]*n # m3/h Qout is the sum of Qg and discharge of the spillway
+    Q_g=[0]*n   #m3/h
+    
+    #Initialization
+    V[0]=lvl_to_vol(p, volume_rating_curve) #### NOT SURE!!!
+    Vmax_HU=lvl_to_vol(15, volume_rating_curve)
+    
+    for t in range(0,n):
+        l[t]=vol_to_lvl(V[t], volume_rating_curve)
+        h=t%24 # pump function during day
+        
+        if l[t] > lmin_HU and h<=18 and h>=10:
+            Q_HU[t]=QT # [m3/h]
+        else:
+            Q_HU[t]=0    # [m3/h]
+            
+        Q_g[t]=max(Q347,(V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt)  # [m3/h]
+        
+        A_sluice[t]=Q_g[t]/(Cqg*np.sqrt(2*g*l[t]))/(3600)  #m3 
+        
+        if l<=p:
+            Q_out[t]=Q_g[t] #m3/h
+        else:
+            Q_out[t]=Q_g[t]+Cqsl*Lspill*np.sqrt(2*g*(l[t]-p)**3)*3600  #[m3/h]
+            
+        V[t+dt]=V[t]+(Q[t]-Q_out[t]-Q_HU[t]-Q_ind[T])*dt
+        
+    return (V,l,A_sluice,Q_out,Q_HU,Q_g)
