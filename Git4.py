@@ -615,8 +615,63 @@ def lvl_to_vol(level, volume_rating_curve):
     
     return a + (b-a)*dec
     
+
 ###########################################
+def minimum_flow(Q, plot=False):
+    sort_Q=sorted(Q,reverse=True)
     
+    n=len(Q_obs)
+    p_exceedance=[k/n for k in range (1,n+1)]
     
+    i=0
+    while p_exceedance[i]<0.95:
+        i=i+1
+    if plot:
+        plt.semilogy(p_exceedance,sort_Q)
+        plt.title("Discharge Duration Curve")
+        plt.plot(p_exceedance,[sort_Q[i]]*(n),color="red")
+    return sort_Q[i]
     
+################################
+
+def Q_S(s,P,ET):
+    A_crop = 5  #[km^2]
+    etha_crop=0.8*60*60   #[m^3/h]
+    etha_p = 0.4*60*60    #[m^3/h]
+    n=len(P)
+    Q_I=[0]*n
+    Q_sup=[0]*n
+    for i in range (0, n):
+        Q_I[i] = ((ET[i]*(1E-3))-(etha_p*P[i]*(1E-3)))*A_crop*(1E6)/etha_crop
+        
+    Q_city=[1*60*60]*n
     
+    for i in range (0,n):
+        Q_sup[i]= Q_I[i] + Q_city[i]
+    return Q_sup
+
+
+ #############################################
+  ### storage equation
+  
+def vol_to_lvl(volume, volume_rating_curve):
+    """
+    Input :
+        - volume [m3] the volume of the reservoir we want to calculate the level
+        - volume_rating_curve a list describing the volume [m3] for each level
+        volume_rating_curve[i] should be the volume at lake height i [m]
+    
+    Output :
+        - the level [m] corresponding to the given volume and VRC
+    """
+    
+    vrc = volume_rating_curve
+    
+    if volume > vrc[-1]:
+        raise ValueError("The given volume of the reservoir is bigger than \
+                         the actual total capacity of the reservoir")
+    
+    for i in range(len(vrc)-1):
+        if volume >= vrc[i] and volume <= vrc[i+1]:
+            dec = (volume - vrc[i]) / (vrc[i+1] - vrc[i])
+            return i+dec
