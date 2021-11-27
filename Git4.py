@@ -63,7 +63,7 @@ K_sat_h = K_sat*3600  # [m/h] Saturated hydraulic conductivity
 c=10                # [-] exponent of ksat for the equation k = ksat * s^c
 t_sub=200            # [h] mean sub-superficial residence time
 z=1000               # [mm] root zone thickness
-Qcity=1              #[m3/s]
+Qcity=1              # [m3/s] what does it describe ?
 day_month=[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] #"day_month": number of days for each month
 month_end=np.cumsum(day_month)-1                    #"month_end": last day of each month
 month_start=month_end-day_month+1
@@ -604,6 +604,11 @@ def lvl_to_vol(level, volume_rating_curve):
         - the volume [m3] at the desired lake height
     """
     
+    if level > len(volume_rating_curve):
+        raise ValueError("The level is too high ! (" + str(level) + \
+                         "m for a maximum level of " + str(len(volume_rating_curve)) + \
+                             ")")
+    
     # partie entière
     i = int(np.floor(level))
     # partie décimale
@@ -615,33 +620,7 @@ def lvl_to_vol(level, volume_rating_curve):
     
     return a + (b-a)*dec
     
-
 ###########################################
-
-    
-################################
-
-def Q_S(P,ET):
-    
-    ## Return the discharge that need to supply the city and the crops in m3/h
-    A_crop = 5  #[km^2]
-    etha_crop=0.8  
-    etha_p = 0.4
-    n=len(P)
-    Q_I=[0]*n
-    Q_sup=[0]*n
-    for i in range (0, n):
-        Q_I[i] = max(((ET[i]*(1E-3))-(etha_p*P[i]*(1E-3)))*A_crop*(1E6)/etha_crop,0)
-        
-    Q_city=[Qcity*3600]*n       #[m3/h]
-    
-    for i in range (0,n):
-        Q_sup[i]= Q_I[i] + Q_city[i]
-    return Q_sup
-
-
- #############################################
-
   
 def vol_to_lvl(volume, volume_rating_curve):
     """
@@ -658,88 +637,178 @@ def vol_to_lvl(volume, volume_rating_curve):
     
     if volume > vrc[-1]:
         raise ValueError("The given volume of the reservoir is bigger than \
-                         the actual total capacity of the reservoir")
+                         the actual total capacity of the reservoir !" + \
+                             str(volume) + " given for a maximum of " + \
+                                 str(vrc[-1]))
     
     for i in range(len(vrc)-1):
         if volume >= vrc[i] and volume <= vrc[i+1]:
             dec = (volume - vrc[i]) / (vrc[i+1] - vrc[i])
             return i+dec
+    
+################################
+
+def Q_S(P,ET):
+    """
+    Input :
+        - P [mm/h] precipitation as a list of length n
+        - ET [mm/h] evapotranspiration as a list of length n (same length required !)
+    
+    Output :
+        - the Q_sup [m3/s] as a list of length n required to satisfy the crop
+        and city needs (local parameters are given inside the function code)
+    """
+    ## Returns the discharge that need to supply the city and the crops in m3/h
+    
+    # Parameters
+    A_crop = 5      #[km^2]
+    etha_crop=0.8   # [-]
+    etha_p = 0.4    # [-]
+    
+    # variable initialization
+    n=len(P)    
+    Q_I=[0]*n       # m3/s the needs of the crops
+    
+    if n != len(ET):
+        raise IndexError("Both parameters are not the same length ! (" + \
+                         str(n)+" for precipitation vs "+str(len(ET))+ \
+                             " for evapotranspiration)")
+    
+    for i in range(n):
+        Q_I[i] = max(( ET[i] - etha_p*P[i])*1e-3/3600*A_crop*(1e6)/etha_crop,0)
+        
+    Q_city=[Qcity]*n       #[m3/s]
+    
+    return np.add(Q_I, Q_city)
+
+
         
 #############################    Reservoir routing
-#parameters of the reservoir
-Cqg=0.7 #[•]
-Cqsp=0.6 #[]
-Lspill=140 #[m]
-p=19 #[m]  
 
-#parameters of power plant
-QT=30*3600 #[m/h]
-D=3.6 #m
-Lp= 1200 #[m]
-ks=0.5 #[mm]
-eta =0.75 #[] Careful, more than one eta
-Deltaz=75 #[m]
-lmin_HU=9 #[m]
-
-Qlim=100 #[m^3/s]
-g=9.81
 
 def Q_347(Q, plot=False):
-    # return the discharge that is exceed 95% of the time
-    # If plot== True, plot the discharge rating curve
+    """
+    Input :
+        - Q [m3/s] (or another unit) the input discharge
+        - plot (default = False) plots the discharge curve and the output Q_347
+    
+    Output :
+        - Q_347 [m3/s] (or the other unit) the discharge that is exceeded 95%
+            of the time
+    """
+    
+    n=len(Q)
     sort_Q=sorted(Q,reverse=True)
     
-    n=len(Q_obs)
+    rank = int(n*95/100)-1
     p_exceedance=[k/n for k in range (1,n+1)]
     
-    i=0
-    while p_exceedance[i]<0.95:
-        i=i+1
     if plot:
         plt.semilogy(p_exceedance,sort_Q)
         plt.title("Discharge Duration Curve")
-        plt.plot(p_exceedance,[sort_Q[i]]*(n),color="red")
-    return sort_Q[i]
-
+        plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
+        
+    return sort_Q[rank]
 
 
 ############## MAIN
+
+#parameters of the reservoir
+Cqg = 0.7 # [-] sluice gate discharge coefficient
+Cqs = 0.6 # [-] spillway discharge coefficient
+Lspill = 140 # [m] spillway effective length
+p = 19 # [m]  difference between spillway level and minimum level
+
+#parameters of power plant
+QT = 30 # [m/s] design discharge of the hydro PP
+D = 3.6 # [m]
+Lp = 1200 # [m]
+ks = 0.5 # [mm]
+eta = 0.75 # [-] Careful, more than one eta
+Deltaz = 75 # [m] difference in height between the elevation of the empty lake 
+                # (headwater) and the tailwater 
+lmin_HU = 9 # [m] min height for electricity generation
+
+Qlim = 100 #[m3/s]
+g = 9.81 # [m/s2] gravity
+
+
+
 # Reservoir routing
 def reservoir_(Q,P,ET,volume_rating_curve):
-    dt=1 #hour
-    # Variables
-    Q347=Q_347(Q,plot=False)*3600 ##CHECK UNITS
-    n=len(Q)
-    V=[0]*n  #m3
-    l=[0]*n     # m
-    A_sluice=[0]*n  #m2
-    Q_ind=Q_S(P,ET)     #m3/h
-    Q_out=[0]*n     #m3/h
-    Q_HU=[0]*n # m3/h Qout is the sum of Qg and discharge of the spillway
-    Q_g=[0]*n   #m3/h
+    """
+    Inputs :
+        - Q [m3/s] the flow entering the dam
+        - P [mm/h] the precipitation over the whole basin
+        - ET [mm/h] the evapotranspiration
+        - volume_rating_curve [m] - [m3] the discrete function between the level
+            of the lake and its volume
+        
+    Output :
+        V,l,A_sluice,Q_out,Q_HU,Q_g)
+        - V [m3] a list of length n describing the total volume in the dam
+        - l [m] a list of length n describing the level in the dam
+        - A_sluice [m2] a list of length n describing the open area of the sluice
+            to let the ater out in the river
+        - Q_out [m3/s] a list of length n describing the flow that exits the
+            dam to the river (NOT power generation !)
+        - Q_HU [m3/s] a list of length n describing the flow used for power
+            generation (does NOT to river)
+        - Q_g [m3/s] a list of length n describing the flow that goes through 
+            the sluice gate only (NOT the spillway)
+        
+    TO-DO :
+        - integrate the power generation calculation ? (not sure)
+    """
+    
+    # Variable to calculate
+    dt = 3600 # [s] time step integration
+    Q347 = Q_347(Q,plot=False)    # [m3/s]
+    n = len(Q)
+    Q_ind = Q_S(P,ET) # [m3/s]
+    
+    # variable initialization
+    V = [0]*n         # [m3]
+    l = [0]*n         # [m] level of the reservoir depending on time
+    A_sluice = [0]*n  # [m2] area of the opening of the sluice gate (see Q_g)
+    Q_out = [0]*n     # [m3/s] total water out of the dam
+    Q_HU = [0]*n      # [m3/s] water going through turbine to generate power
+    Q_g = [0]*n       # [m3/s] water flow through the gate
     
     #Initialization
-    V[0]=lvl_to_vol(p, volume_rating_curve) #### NOT SURE!!!
-    Vmax_HU=lvl_to_vol(15, volume_rating_curve)
+    # l[0] = ???
+    V[0] = lvl_to_vol(V[0], volume_rating_curve)
+    Vmax_HU = lvl_to_vol(15, volume_rating_curve)
     
-    for t in range(0,n):
-        l[t]=vol_to_lvl(V[t], volume_rating_curve)
-        h=t%24 # pump function during day
+    # for 24 hours when is the turbine working (peak hours)
+    turbine_hours = [int(x >= 8 and x < 21) for x in range(24)]
+    turbine_state = int(l[0] > lmin_HU)     # 1 if the turbine is on for the 
+                                            # whole day, 0 otherwise 
+    
+    for t in range(n):
         
-        if l[t] > lmin_HU and h<=18 and h>=10:
-            Q_HU[t]=QT # [m3/h]
-        else:
-            Q_HU[t]=0    # [m3/h]
+       
+        
+        h = t%24
+        # is the turbine working during this day ? update if it is midnight
+        if h == 0:
+            turbine_state = int(l[t] > lmin_HU)
+        
+        Q_HU[t] = turbine_state * turbine_hours[h] * QT    # [m3/s]
             
-        Q_g[t]=max(Q347,(V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt)  # [m3/h]
+        Q_g[t] = max(Q347 , min(Qlim, \
+                    (V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt) )  # [m3/s]
         
-        A_sluice[t]=Q_g[t]/(Cqg*np.sqrt(2*g*l[t]))/(3600)  #m3 
+        A_sluice[t] = Q_g[t] / (Cqg*np.sqrt(2*g*l[t]))  # [m2] 
         
+        # does the water spills over the dam ?
         if l<=p:
-            Q_out[t]=Q_g[t] #m3/h
+            Q_out[t] = Q_g[t] #  [m3/s]
         else:
-            Q_out[t]=Q_g[t]+Cqsl*Lspill*np.sqrt(2*g*(l[t]-p)**3)*3600  #[m3/h]
+            Q_out[t] = Q_g[t] + Cqs*Lspill*np.sqrt(2*g*(l[t]-p)**3)  #[m3/s]
             
-        V[t+dt]=V[t]+(Q[t]-Q_out[t]-Q_HU[t]-Q_ind[T])*dt
+        # update volume and level
+        V[t+1]=V[t]+(Q[t]-Q_out[t]-Q_HU[t]-Q_ind[t])*dt
+        l[t+1] = vol_to_lvl(V[t+1], volume_rating_curve)
         
     return (V,l,A_sluice,Q_out,Q_HU,Q_g)
