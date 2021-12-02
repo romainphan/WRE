@@ -58,7 +58,7 @@ phi=38     # [degrees] latitude of the basin
 # these are the 'free parameters' : they will be determined during next week (session 2 of the project)
 # here is a proposed average value that is the right order of magnitude
 
-K_sat=1e-5           # [m/s] Saturated hydraulic conductivity
+K_sat=1e-6          # [m/s] Saturated hydraulic conductivity
 K_sat_h = K_sat*3600  # [m/h] Saturated hydraulic conductivity
 c=10                # [-] exponent of ksat for the equation k = ksat * s^c
 t_sub=200            # [h] mean sub-superficial residence time
@@ -706,7 +706,7 @@ def Q_347(Q, plot=False):
     if plot:
         plt.semilogy(p_exceedance,sort_Q)
         plt.title("Discharge Duration Curve")
-        plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
+        #plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
         
     return sort_Q[rank]
 
@@ -714,8 +714,8 @@ def Q_347(Q, plot=False):
 ############## MAIN
 
 #parameters of the reservoir
-Cqg = 0.7 # [-] sluice gate discharge coefficient
-Cqs = 0.6 # [-] spillway discharge coefficient
+Cqg = 0.6 # [-] sluice gate discharge coefficient
+Cqs = 0.7 # [-] spillway discharge coefficient
 Lspill = 140 # [m] spillway effective length
 p = 19 # [m]  difference between spillway level and minimum level
 
@@ -776,8 +776,8 @@ def reservoir_(Q,P,ET,volume_rating_curve):
     Q_g = [0]*n       # [m3/s] water flow through the gate
     
     #Initialization
-    # l[0] = ???
-    V[0] = lvl_to_vol(V[0], volume_rating_curve)
+    l[0] = 14 
+    V[0] = lvl_to_vol(l[0], volume_rating_curve)
     Vmax_HU = lvl_to_vol(15, volume_rating_curve)
     
     # for 24 hours when is the turbine working (peak hours)
@@ -796,13 +796,12 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         
         Q_HU[t] = turbine_state * turbine_hours[h] * QT    # [m3/s]
             
-        Q_g[t] = max(Q347 , min(Qlim, \
-                    (V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt) )  # [m3/s]
-        
+        Q_g[t] = max(Q347 , min(Qlim,(V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt) )  # [m3/s]
+        print(Cqg*np.sqrt(2*g*l[t]))
         A_sluice[t] = Q_g[t] / (Cqg*np.sqrt(2*g*l[t]))  # [m2] 
         
         # does the water spills over the dam ?
-        if l<=p:
+        if l[t]<=p:
             Q_out[t] = Q_g[t] #  [m3/s]
         else:
             Q_out[t] = Q_g[t] + Cqs*Lspill*np.sqrt(2*g*(l[t]-p)**3)  #[m3/s]
