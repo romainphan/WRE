@@ -547,7 +547,7 @@ def rain_gen(years=100,plot=True):
                     output[total_day] = rd.expovariate(1/alpha[m])
                 total_day += 1
     if plot:
-        moy,std=parametres(output,100)
+        moy,std=parametres(output,years)
         figure=plt.figure(figsize=(30,10))
         
         plt.subplot(1,2,1)
@@ -730,9 +730,10 @@ Deltaz = 75 # [m] difference in height between the elevation of the empty lake
 lmin_HU = 9 # [m] min height for electricity generation
 
 Qlim = 100 #[m3/s]
-g = 9.81 # [m/s2] gravity
+g = 9.806 # [m/s2] gravity
 
-
+#Power=9806*net_head*Q*eta/1000000    %[MW]
+gamma=g*1000
 
 # Reservoir routing
 def reservoir_(Q,P,ET,volume_rating_curve):
@@ -756,6 +757,7 @@ def reservoir_(Q,P,ET,volume_rating_curve):
             generation (does NOT to river)
         - Q_g [m3/s] a list of length n describing the flow that goes through 
             the sluice gate only (NOT the spillway)
+        - Pow [Watt] turbine power generation
         
     TO-DO :
         - integrate the power generation calculation ? (not sure)
@@ -774,6 +776,7 @@ def reservoir_(Q,P,ET,volume_rating_curve):
     Q_out = [0]*n     # [m3/s] total water out of the dam
     Q_HU = [0]*n      # [m3/s] water going through turbine to generate power
     Q_g = [0]*n       # [m3/s] water flow through the gate
+    Pow=[0]*n
     
     #Initialization
     l[0] = 14 
@@ -785,7 +788,7 @@ def reservoir_(Q,P,ET,volume_rating_curve):
     turbine_state = int(l[0] > lmin_HU)     # 1 if the turbine is on for the 
                                             # whole day, 0 otherwise 
     
-    for t in range(n):
+    for t in range(n-1):
         
        
         
@@ -797,8 +800,11 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         Q_HU[t] = turbine_state * turbine_hours[h] * QT    # [m3/s]
             
         Q_g[t] = max(Q347 , min(Qlim,(V[t]+(Q[t]-Q_HU[t]-Q_ind[t])*dt-Vmax_HU)/dt) )  # [m3/s]
-        print(Cqg*np.sqrt(2*g*l[t]))
-        A_sluice[t] = Q_g[t] / (Cqg*np.sqrt(2*g*l[t]))  # [m2] 
+        #print(Cqg*np.sqrt(2*g*l[t]))
+        if l[t]==0:
+            A_sluice[t]=0
+        else:
+            A_sluice[t] = Q_g[t] / (Cqg*np.sqrt(2*g*l[t]))  # [m2] 
         
         # does the water spills over the dam ?
         if l[t]<=p:
@@ -810,4 +816,29 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         V[t+1]=V[t]+(Q[t]-Q_out[t]-Q_HU[t]-Q_ind[t])*dt
         l[t+1] = vol_to_lvl(V[t+1], volume_rating_curve)
         
-    return (V,l,A_sluice,Q_out,Q_HU,Q_g)
+        # power generation of the turbine [W]
+        Pow=eta*gamma*Q_HU[t]*(l[t]+Deltaz)
+        
+
+        
+    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow)
+
+
+###Plot
+def plot_routine(Q,Q_out,V,l):
+    
+    '''
+        Input: Qin, Qoutn V, l
+        Plot main graph of reservoir routine
+    '''
+    figure=plt.figure(figsize=(15,10))
+    plt.subplot(3,1,1)
+    plt.plot(Q,label="Qin")
+    plt.plot(Q_out,label="Qout")
+    plt.ylabel("discharge")
+    plt.subplot(3,1,2)
+    plt.plot(V)
+    plt.ylabel("Volume")
+    plt.subplot(3,1,3)
+    plt.plot(l)
+    plt.ylabel("level")
