@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import random as rd
+import scipy.stats
 # import warnings
 # warnings.filterwarnings("error")
 # warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -196,7 +197,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
         - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
         - t_sub [h] is the mean sub-superficial residence time (free parameter)
-        - z [m] is the root zone thickness (free parameter)
+        - z [mm] is the root zone thickness (free parameter)
         - P [mm/h] is the hourly precipitation, is a vector !
         - K_c [-] is the crop coefficient representative of the whole area
         - n_years [years] is the number of years to process 
@@ -239,18 +240,16 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     
     # initalize the output vectors
     n_steps = n_years * 365 * 24
-    Q = [0 for i in range(n_steps)]
-    R = Q.copy()
-    I = Q.copy()
-    s = Q.copy()       
-    L = Q.copy()
-    ET = Q.copy()
+    Q = np.zeros(n_steps)
+    R = np.zeros(n_steps)
+    I = np.zeros(n_steps)
+    s = np.zeros(n_steps)    
+    L = np.zeros(n_steps)
+    ET = np.zeros(n_steps)
     
     # and also :
-    global q_sup
-    global q_sub
-    q_sup = Q.copy()
-    q_sub = Q.copy()
+    q_sup = np.zeros(n_steps)
+    q_sub = np.zeros(n_steps)
     
     # initializing s, q_sup, q_sub & Q
     s[0] = s_0
@@ -258,6 +257,9 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     q_sub[0] = V_sub_0 / t_sub
     Q[0] = A_glob*(q_sup[0] + q_sub[0]) + Q_b_glob
     
+    
+     # euler integration :
+    dt = 1    # [h]
     # for each time step do 
     for t in range(n_steps):           
         
@@ -283,27 +285,28 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             print("c = ", c)
             error_count += 1
         
-        # euler integration :
-        dt = 1    # [h]
+       
         
         # soil moisture
         try :
-            s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n_glob*z_glob)
+            s[t+1] = s[t] + dt * (I[t]-ET[t]-L[t])/(n_glob*z)
             
-            if s[t+1] < 0:
-                # print("\nWARNING !")
-                # print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
-                # ans = input("Ignore and set value to 0 ? [y] / [n] ")
-                # if ans == "y":
-                #     print("    Setting value to 0\n")
-                # elif ans == "n":
-                #     print("Aborting...")
-                #     raise ValueError("The value of the soil moisture is negative !")
-                s[t+1] = 0
-                error_count += 1
-            elif s[t+1] > 1:
-                s[t+1] = 1
-                error_count += 1
+            # if s[t+1] < 0:
+            #     # print("\nWARNING !")
+            #     # print("    Soil moisture negative (value = "+ str(s[t+1]) + ") for time t="+ str(t+1))
+            #     # ans = input("Ignore and set value to 0 ? [y] / [n] ")
+            #     # if ans == "y":
+            #     #     print("    Setting value to 0\n")
+            #     # elif ans == "n":
+            #     #     print("Aborting...")
+            #     #     raise ValueError("The value of the soil moisture is negative !")
+            #     s[t+1] = 0
+            #     error_count += 1
+            # elif s[t+1] > 1:
+                
+            #     input(str(s[t+1]))
+            #     s[t+1] = 1
+            #     error_count += 0.0001
         except IndexError:
             break
         
@@ -314,7 +317,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         # Q
         Q[t+1] = A_glob * (q_sup[t+1] + q_sub[t+1])/1000/3600 + Q_b_glob
     
-    return [Q, R, I, s, L, ET]
+    return [Q, R, I, s, L, ET, q_sub, q_sup, error_count]
 
 
 ##################################################
@@ -329,7 +332,7 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
         - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
         - t_sub [h] is the mean sub-superficial residence time (free parameter)
-        - z [m] is the root zone thickness (free parameter)
+        - z [mm] is the root zone thickness (free parameter)
         - P [mm/h] is the hourly precipitation, is a vector !
         - K_c [-] is the crop coefficient representative of the whole area
         - n_years [years] is the number of years to process 
@@ -371,18 +374,23 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
 def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
     out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years)
     
+    dt = 1 # [h] time step
     s = out[3]
     P_tot = np.sum(P)       # mm/h
     R_tot = np.sum(out[1])
     L_tot = np.sum(out[4])
     ET_tot = np.sum(out[5])
+    q_sub = out[6]
+    q_sup = out[7]
+    errors = out[8]
     q_sup_tot = np.sum(q_sup)
+    
     q_sub_tot = np.sum(q_sub)
     
-    testS = P_tot / (ET_tot + R_tot + L_tot + n_glob*z*(s[-1]-s[0]))
+    testS = P_tot / (ET_tot + R_tot + L_tot + dt*n_glob*z*(s[-1]-s[0]) )
     testQ = (P_tot - ET_tot) / (q_sub_tot + q_sup_tot + n_glob*z*(s[-1]-s[0]) + q_sup[-1]*t_sup_glob + q_sub[-1]*t_sub)
     
-    return testS, testQ
+    return testS, testQ, errors, max(s)
     
     
 #########################################
@@ -414,7 +422,7 @@ def NS(Q, Q_observed, Q_averaged):
     """
     # ne semble pas avoir de pb 
     
-    a = np.sum(  np.power(  np.subtract(Q, Q_observed) , 2)   )
+    a = np.sum(  np.power(  np.subtract(Q, Q_observed) , 2)  )
     b = np.sum(  np.power(  np.subtract(Q, Q_averaged) , 2)  )
     
     return 1 - a/b
@@ -436,7 +444,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
                     [1, 400],
                     [1, 2000]]      # min/max values of the parameters
     theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
-    
+    print(theta_var)
     
     
     # parameters
@@ -455,13 +463,20 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         # print(n_sim)
         # generate new parameters
         for i in range(4):
-            keep_gen = True
-            while keep_gen: 
-                theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
+            theta_new[i] = scipy.stats.truncnorm.rvs( \
+                    (theta_minmax[i][0]-theta_old[i])/theta_var[i], \
+                    (theta_minmax[i][1]-theta_old[i])/theta_var[i], \
+                    loc = theta_old[i], scale = theta_var[i])
+            
+            # keep_gen = True
+            # while keep_gen: 
+            #     theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
                 
-                if theta_new[i] >= theta_minmax[i][0] and theta_new[i] <= theta_minmax[i][1]:
-                    keep_gen = False
-               
+            #     if theta_new[i] >= theta_minmax[i][0] and theta_new[i] <= theta_minmax[i][1]:
+            #         keep_gen = False
+        # print(theta_new)
+        # input()
+        
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c_glob, 6)[0]
         ns_new = NS(Q_mod, Q_obs, Q_avg)
         NS_out[n_sim] = ns_new
