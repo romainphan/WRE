@@ -732,11 +732,16 @@ lmin_HU = 9 # [m] min height for electricity generation
 Qlim = 100 #[m3/s]
 g = 9.806 # [m/s2] gravity
 
+f = (1/(-2*np.log(ks/(1000*D*3.7))))**2#Colebrook equation
+A=np.pi*D**2
+kL = f*Lp/(2*g*D*A**2) + 1.5/(2*g*A**2)      #Loss coefficient
+
+
 #Power=9806*net_head*Q*eta/1000000    %[MW]
 gamma=g*1000
 
 # Reservoir routing
-def reservoir_(Q,P,ET,volume_rating_curve):
+def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
     """
     Inputs :
         - Q [m3/s] the flow entering the dam
@@ -744,6 +749,7 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         - ET [mm/h] the evapotranspiration
         - volume_rating_curve [m] - [m3] the discrete function between the level
             of the lake and its volume
+        - lmax_HU [m] maximum level for hydropower production
         
     Output :
         V,l,A_sluice,Q_out,Q_HU,Q_g)
@@ -758,6 +764,9 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         - Q_g [m3/s] a list of length n describing the flow that goes through 
             the sluice gate only (NOT the spillway)
         - Pow [Watt] turbine power generation
+        - profit [CHF]
+        - p_flood
+        - E_annual [GWh]
         
     TO-DO :
         - integrate the power generation calculation ? (not sure)
@@ -781,16 +790,21 @@ def reservoir_(Q,P,ET,volume_rating_curve):
     #Initialization
     l[0] = 14 
     V[0] = lvl_to_vol(l[0], volume_rating_curve)
-    Vmax_HU = lvl_to_vol(15, volume_rating_curve)
+    Vmax_HU = lvl_to_vol(lmax_HU, volume_rating_curve)
     
     # for 24 hours when is the turbine working (peak hours)
     turbine_hours = [int(x >= 8 and x < 21) for x in range(24)]
     turbine_state = int(l[0] > lmin_HU)     # 1 if the turbine is on for the 
                                             # whole day, 0 otherwise 
+    # flood condition an damages
+    y_lim = 0.1*np.sqrt(Qlim)+0.5 # maximum y before flood
+    D=0 # CHF, Damages 
+    flood=False # Are we in a flood event or not?
+    maxy=0 # maximum of height in a flood event
+    n_flood=0
     
     for t in range(n-1):
         
-       
         
         h = t%24
         # is the turbine working during this day ? update if it is midnight
@@ -817,11 +831,40 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         l[t+1] = vol_to_lvl(V[t+1], volume_rating_curve)
         
         # power generation of the turbine [W]
-        Pow=eta*gamma*Q_HU[t]*(l[t]+Deltaz)
+        HT = l[t] + Deltaz - kL*QT**2   
+        Pow[t]=eta*gamma*Q_HU[t]*(HT*Q_HU[t]**2)
         
+        
+        # Detection of flood event
+        if Q_out[t] > (Qlim + 1):
+            n_flood=n_flood+1
+            
+        y=0.1*np.sqrt(Q_out[t])
+            
+        if flood: # We are in a flood event
+            if y<y_lim:
+                # End of the flood event
+                z=maxy-y_lim
+                maxy=0
+                flood=False
+                #print(z)
+                D=D+(1+z)**2.25
+            else:
+                # Still in the flood event
+                if y>maxy:
+                    maxy=y
+                     
+        elif y>=y_lim:
+            flood=True # Beginning of a flood event
+            maxy=y
 
-        
-    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow)
+    
+    p_flood=n_flood/n
+    Total_energy=np.sum(Pow)
+    E_annual=Total_energy/(n*365*24*10**(-9)) # [GWh]
+    profit= Total_energy*Energy_price*10**(-6) - D*1000000
+    
+    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow,profit,p_flood,E_annual)
 
 
 ###Plot
