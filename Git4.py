@@ -484,43 +484,38 @@ best = [1.224e-5, 6.8311, 64.5218, 581.1]
 
 
 
-def parametres(precip,year=6):
-    n_r1=[0]*year*12
-    I_r1=[0]*year*12
-   
-    jour=0
-    for i in range (0,year*12):
-        n=0
-        I=0
-        m=144%12
-        for k in range (jour,jour+day_month[m]):
-            
-            if precip[k]!=0:
-                n=n+1
-                I=I+precip[k]
-            n_r1[i]=n
-            I_r1[i]=I
-        jour=jour+day_month[m]-1
+def parametres(P):
+    """
+    INPUT: Precipitation [mm/h]
+    OUTPUT: parameters 
+    -lambda, 
+    -alpha, 
+    -monthly mean precipitation [mm/day] 
+    -monthly deviation
+    """
+    years=int(len(P)/(365*24))
+    P_jour=[np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
     
-    n_rainy=[0]*12
-    I_rainy=[0]*12
-    for i in range (0,12):
-        n=0
-        I=0
-        for j in range (0,6):
-            n=n+n_r1[j*12+i]
-            I=I+I_r1[j*12+i]
-        n_rainy[i]=n
-        I_rainy[i]=I
-        
-    lambda_=[0]*12
-    alpha=[0]*12
-    
-    for i in range(0,12):
-        lambda_[i]=n_rainy[i]/(day_month[i]*6)
-        alpha[i]=I_rainy[i]/n_rainy[i]
-        
-    return (lambda_,alpha)
+    n_rainy_day=[0]*12
+    I_rain=[0]*12
+    month_P=[[]]*12
+
+    for year in range(0,years):
+        for month in range(0,12):
+            for k in range(month_start[month],month_end[month]+1):
+                
+                x=P[365*year+k]
+                month_P[month]=month_P[month]+[x]
+                if x != 0:
+                    n_rainy_day[month]=n_rainy_day[month]+1
+                    I_rain[month]=I_rain[month]+P[365*year+k]
+                    
+                    
+    lambda_p=[n_rainy_day[k]/(day_month[k]*years) for k in range(0,12)]
+    alpha=[I_rain[k]/n_rainy_day[k] for k in range (0,12)]
+    mean_P=[np.mean(month_P[k]) for k in range(0,12)]
+    std_P=[np.std(month_P[k]) for k in range(0,12)]
+    return(lambda_p,alpha,mean_P,std_P)
     
     
     
@@ -529,10 +524,15 @@ def parametres(precip,year=6):
 
 
 def rain_gen(years=100,plot=True):
-    
+    """
+    INPUT:
+    - years: number of year we want to simulate
+    - plot: do we want to plot the statistics od the simulation ? 
+            If yes: plot of lambda, alpha, mean precipitation and mean deviation observed vs generated
+    """
     #alpha lambda
     precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
-    lambda_,alpha=parametres(precipitationj)
+    lambda_,alpha,mean_P,std_P=parametres2(precipitation)
     
     
     output = [0 for i in range(365*years)]
@@ -546,27 +546,48 @@ def rain_gen(years=100,plot=True):
                 if rd.random() < lambda_[m]:
                     output[total_day] = rd.expovariate(1/alpha[m])
                 total_day += 1
+                
+    P_gen=downscaling(output)
+    
+    #statistic
     if plot:
-        moy,std=parametres(output,years)
+        lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres2([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
+        
         figure=plt.figure(figsize=(30,10))
         
-        plt.subplot(1,2,1)
+        plt.subplot(2,2,1)
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
         ax=plt.gca()
-        plt.plot(lambda_,marker='o',label="lambda")
-        plt.plot(moy,marker='o',label="mean")
+        plt.plot(lambda_,marker='o',label="observed")
+        plt.plot(lambda_gen,marker='o',label="generated")
         ax.set_title("Lambda",fontsize=30)
         ax.legend()
         
-        plt.subplot(1,2,2)
+        plt.subplot(2,2,2)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
-        plt.plot(alpha,marker='o',label="alpha")
-        plt.plot(std,marker='o',label="deviation")
+        plt.plot(alpha,marker='o',label="observed")
+        plt.plot(alpha_gen,marker='o',label="generated")
         ax.set_title("Alpha",fontsize=30)
         ax.legend()
-    return (downscaling(output))
-    
+        
+        plt.subplot(2,2,3)
+        ax=plt.gca()
+        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.plot(mean_P,marker='o',label="observed")
+        plt.plot(mean_P_gen,marker='o',label="generated")
+        ax.set_title("monthly mean precipitation",fontsize=30)
+        ax.legend()       
+        
+        plt.subplot(2,2,4)
+        ax=plt.gca()
+        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.plot(std_P,marker='o',label="observed")
+        plt.plot(std_P_gen,marker='o',label="generated")
+        ax.set_title("monthly mean deviation",fontsize=30)
+        ax.legend()  
+        
+    return (P_gen)
 #########################################☻
 
 
@@ -675,7 +696,7 @@ def Q_S(P,ET):
                              " for evapotranspiration)")
     
     for i in range(n):
-        Q_I[i] = max(( ET[i] - etha_p*P[i])*1e-3/3600*A_crop*(1e6)/etha_crop,0)
+        Q_I[i] = max((( ET[i] - etha_p*P[i])*1e-3/3600*A_crop*(1e6))/etha_crop,0)
         
     Q_city=[Qcity]*n       #[m3/s]
     
@@ -885,3 +906,4 @@ def plot_routine(Q,Q_out,V,l):
     plt.subplot(3,1,3)
     plt.plot(l)
     plt.ylabel("level")
+    plt.legend()
