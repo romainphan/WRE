@@ -733,13 +733,13 @@ Qlim = 100 #[m3/s]
 g = 9.806 # [m/s2] gravity
 
 f = (1/(-2*np.log(ks/(1000*D*3.7))))**2#Colebrook equation
-A=np.pi*D**2
-kL = f*Lp/(2*g*D*A**2) + 1.5/(2*g*A**2)      #Loss coefficient
+A_pipe=np.pi*D**2
+kL = f*Lp/(2*g*D*A_pipe**2) + 1.5/(2*g*A**2)      #Loss coefficient
 
 
 #Power=9806*net_head*Q*eta/1000000    %[MW]
 gamma=g*1000
-
+Energy_price=75
 # Reservoir routing
 def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
     """
