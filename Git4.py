@@ -48,6 +48,10 @@ Q_obs=pd.read_csv(dirname+"/Q_obs.txt").T.to_numpy()[0]
 extract=pd.read_csv(dirname+"/area_rating_curve.txt").T.to_numpy()[0]
 A_rating = [int(ele[13:]) for ele in extract[1:]]
 
+# changes in monthly mean rainfall intensity of rainy days [%]
+alpha_c=pd.read_csv(dirname+"/alpha_change.txt").T.to_numpy()[0]
+#temperature in a climate change scenario [degrees C]
+T_future=T_m+T_c 
 
 
 
@@ -97,6 +101,15 @@ ET_0 = [16*N_m[i] / 12 * (10*T_m[i]/Ii)**a / (24*day_month[i]) for i in range(12
 
 #%% Define the auxiliairy functions
 
+def ET_0(T):
+    """
+    -INPUT: Monthly temperature
+    - OUTPUT : Monthly average potential evapotranspiration in [mm/h]
+    
+    """
+    evap=[16*N_m[i] / 12 * (10*T[i]/Ii)**a / (24*day_month[i]) for i in range(12)]
+    return evap
+
 def month(t):
     """
     Inputs :
@@ -121,11 +134,12 @@ def month(t):
 
 ########################################
 
-def f_ET(t,s):
+def f_ET(t,s,T=T_m):
     """
     Input : 
         - hour [h] at which the computation is done
         - s [-] soil moisture at the given time
+        - T [degrees °C] monthly temperature
     
     Output : 
         - ET [mm/h] the evapotranspiration
@@ -135,13 +149,14 @@ def f_ET(t,s):
         if s > s_1 (too much water), ET = ET_0 * K_c
         else : linear interpolation between 0 and ET_0 * K_c
     """
+    Evap0=ET_0(T)
     m = month(t)
     if s <= s_w:
         return 0
     elif (s > s_w and s < s_1):
-        return ET_0[m] * K_c[m] / (s_1-s_w) * (s-s_w)
+        return Evap0[m] * K_c[m] / (s_1-s_w) * (s-s_w)
     else:
-        return ET_0[m] * K_c[m]
+        return Evap0[m] * K_c[m]
     
     
 ################################
@@ -180,7 +195,7 @@ def downscaling(Pdaily):
 #   2. plot_model plots the differents curves that the model gives out
 #   3. check_model checks if the model is correct using the different balance equations
 
-def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0):
+def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0,T=T_m):
     """
     Inputs :
         - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
@@ -194,6 +209,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - s_0 [-] soil moisture at time t=0. Defaults to 0.
         - V_sup_0 [m3] Superficial volume of water at time t=0. Defaults to 0.
         - V_sub_0 [m3] Sub-superficial volume of water at time t=0. Defaults to 0.
+        - T [degrees °C] monthly temperature, can be changed in a climate change scenario
     
     Output :
         - Q [m3/s] the total discharge 
@@ -258,7 +274,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         R[t] = P[t] - I[t]            # [mm/h]
         
         # Evapotranspiration
-        ET[t] = f_ET(t, s[t])        #[mm/h]
+        ET[t] = f_ET(t, s[t],T)        #[mm/h]
         
         # Leaching
         # parfois le programme s'arrête, la suite est pour stopper proprement
@@ -311,7 +327,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
 
 
 
-def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0):
+def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0,T=T_m):
     """
     plots the outputs of the hydrological model using the same parameters.
     
@@ -327,6 +343,7 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - s_0 [-] soil moisture at time t=0. Defaults to 0.
         - V_sup_0 [m3] Superficial volume of water at time t=0. Defaults to 0.
         - V_sub_0 [m3] Sub-superficial volume of water at time t=0. Defaults to 0.
+        - T [degrees °C] monthly temperature, can be changed in a climate change scenario
     
     Output (plots) :
         - Q [m3/s] the total discharge 
@@ -337,7 +354,7 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - ET [mm/h] the actual evapotranspiration
     """
 
-    out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0, V_sup_0, V_sub_0)
+    out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0, V_sup_0, V_sub_0,T)
     
     lines = 2
     col = 3
@@ -511,7 +528,7 @@ best_param = [9e-7, 4.74, 84.04, 14]
 
 def parametres(P):
     """
-    INPUT: Precipitation [mm/h]
+    INPUT: Precipitation [mm/h] (Or other)
     OUTPUT: parameters 
     -lambda, 
     -alpha, 
@@ -548,18 +565,32 @@ def parametres(P):
 
 
 
-def rain_gen(years=100,plot=True):
+def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
     """
     INPUT:
     - years: number of year we want to simulate
     - plot: do we want to plot the statistics od the simulation ? 
             If yes: plot of lambda, alpha, mean precipitation and mean deviation observed vs generated
+    - climate_change : added to compute in a climate change scenario
     """
     #alpha lambda
     precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
-    lambda_,alpha,mean_P,std_P=parametres2(precipitation)
+    lambda_,alpha,mean_P,std_P=parametres(precipitation)
     
+    title=" Statistics of the generated Precipitations"
+    obs="observed"
+    gen="generated"
     
+    if climate_change:
+        # We are in climate change scenarios, 
+        #alpha is modified by the percent of changes in monthly mean rainfall intensity
+        for i in range(0,12):
+            alpha[i]=(1+alpha_c[i]/(100))*alpha[i]
+        title=title+" - climate change scenario"
+        obs="current"
+        gen="future"
+            
+            
     output = [0 for i in range(365*years)]
     total_day = 0
     
@@ -576,7 +607,7 @@ def rain_gen(years=100,plot=True):
     
     #statistic
     if plot:
-        lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres2([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
+        lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
         
         figure=plt.figure(figsize=(30,10))
         
@@ -585,7 +616,7 @@ def rain_gen(years=100,plot=True):
         ax=plt.gca()
         plt.plot(lambda_,marker='o',label="observed")
         plt.plot(lambda_gen,marker='o',label="generated")
-        ax.set_title("Lambda",fontsize=30)
+        ax.set_title("Lambda",fontsize=20)
         ax.legend()
         
         plt.subplot(2,2,2)
@@ -593,7 +624,7 @@ def rain_gen(years=100,plot=True):
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
         plt.plot(alpha,marker='o',label="observed")
         plt.plot(alpha_gen,marker='o',label="generated")
-        ax.set_title("Alpha",fontsize=30)
+        ax.set_title("Alpha",fontsize=20)
         ax.legend()
         
         plt.subplot(2,2,3)
@@ -601,7 +632,7 @@ def rain_gen(years=100,plot=True):
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
         plt.plot(mean_P,marker='o',label="observed")
         plt.plot(mean_P_gen,marker='o',label="generated")
-        ax.set_title("monthly mean precipitation",fontsize=30)
+        ax.set_title("monthly mean precipitation",fontsize=20)
         ax.legend()       
         
         plt.subplot(2,2,4)
@@ -609,8 +640,10 @@ def rain_gen(years=100,plot=True):
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
         plt.plot(std_P,marker='o',label="observed")
         plt.plot(std_P_gen,marker='o',label="generated")
-        ax.set_title("monthly mean deviation",fontsize=30)
+        ax.set_title("monthly mean deviation",fontsize=20)
         ax.legend()  
+        
+        plt.suptitle(title,fontsize=30)
         
     return (P_gen)
 
@@ -947,3 +980,5 @@ def plot_routine(Q,Q_out,V,l):
     plt.plot(l)
     plt.ylabel("level")
     plt.legend()
+    
+    return None
