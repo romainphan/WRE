@@ -5,7 +5,7 @@ Created on Thu Nov 11 13:14:15 2021
 
 @author: magelineduquesne
 """
-# IMPORT MODULES
+#%% IMPORT MODULES
 import os
 import pandas as pd
 import numpy as np
@@ -19,6 +19,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # import scipy.misc
 # from scipy.misc import derivative
 # import scipy.stats as stats
+
+
+#%% Get files from directory
 
 dirname = os.path.dirname(__file__)
 
@@ -45,28 +48,33 @@ Q_obs=pd.read_csv(dirname+"/Q_obs.txt").T.to_numpy()[0]
 extract=pd.read_csv(dirname+"/area_rating_curve.txt").T.to_numpy()[0]
 A_rating = [int(ele[13:]) for ele in extract[1:]]
 
-# PARAMETERS
-s_w=0.25    # [-] Wilting point
-s_1=0.4     # [-] soil moisture above which plants transpire at kc*ET0
-n=0.3      # [-] Porosity
-Q_b=7       # [m3/s] Base flow
-t_sup=22    # [h] superficial residence time
-A=4000*1e6     # [m²] area of the basin
-phi=38     # [degrees] latitude of the basin
+
+
+
+#%% set up gobal PARAMETERS
+
+s_w = 0.25    # [-] Wilting point
+s_1 = 0.4     # [-] soil moisture above which plants transpire at kc*ET0
+n = 0.3      # [-] Porosity
+Q_b = 7       # [m3/s] Base flow
+t_sup = 22    # [h] superficial residence time
+A = 4000*1e6     # [m²] area of the basin
+phi = 38     # [degrees] latitude of the basin
 
 
 # these are the 'free parameters' : they will be determined during next week (session 2 of the project)
 # here is a proposed average value that is the right order of magnitude
 
-K_sat=1e-6          # [m/s] Saturated hydraulic conductivity
+K_sat = 1e-6          # [m/s] Saturated hydraulic conductivity
 K_sat_h = K_sat*3600  # [m/h] Saturated hydraulic conductivity
-c=10                # [-] exponent of ksat for the equation k = ksat * s^c
-t_sub=200            # [h] mean sub-superficial residence time
-z=1000               # [mm] root zone thickness
-Qcity=1              # [m3/s] what does it describe ?
-day_month=[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] #"day_month": number of days for each month
-month_end=np.cumsum(day_month)-1                    #"month_end": last day of each month
-month_start=month_end-day_month+1
+c = 10                # [-] exponent of ksat for the equation k = ksat * s^c
+t_sub = 200            # [h] mean sub-superficial residence time
+z = 1000               # [mm] root zone thickness
+Qcity = 1              # [m3/s] what does it describe ?
+day_month = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] #"day_month": number of days for each month
+month_end = np.cumsum(day_month)-1                    #"month_end": last day of each month
+month_start = month_end-day_month+1
+
 
 
 #Thornthwaite equation
@@ -84,7 +92,10 @@ a = 6.75e-7 * Ii**3 - 7.71e-5 * Ii**2 + 1.79e-2 * Ii + 0.49           # experime
 ET_0 = [16*N_m[i] / 12 * (10*T_m[i]/Ii)**a / (24*day_month[i]) for i in range(12)]  # [mm/h]
 
 
-##########################################"
+
+
+
+#%% Define the auxiliairy functions
 
 def month(t):
     """
@@ -164,13 +175,18 @@ def downscaling(Pdaily):
 
 
 
+#%% Hydrological model
+#   1. hydr_model models the hydrological quantites according to the parameters
+#   2. plot_model plots the differents curves that the model gives out
+#   3. check_model checks if the model is correct using the different balance equations
+
 def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0):
     """
     Inputs :
         - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
         - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
         - t_sub [h] is the mean sub-superficial residence time (free parameter)
-        - z [m] is the root zone thickness (free parameter)
+        - z [mm] is the root zone thickness (free parameter)
         - P [mm/h] is the hourly precipitation, is a vector !
         - K_c [-] is the crop coefficient representative of the whole area
         - n_years [years] is the number of years to process 
@@ -273,11 +289,11 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
                 # elif ans == "n":
                 #     print("Aborting...")
                 #     raise ValueError("The value of the soil moisture is negative !")
-                s[t+1] = 0
+                # s[t+1] = 0
                 error_count += 1
             elif s[t+1] > 1:
-                s[t+1] = 1
-                error_count += 1
+                # s[t+1] = 1
+                error_count += 0.0001
         except IndexError:
             break
         
@@ -303,7 +319,7 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
         - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
         - t_sub [h] is the mean sub-superficial residence time (free parameter)
-        - z [m] is the root zone thickness (free parameter)
+        - z [mm] is the root zone thickness (free parameter)
         - P [mm/h] is the hourly precipitation, is a vector !
         - K_c [-] is the crop coefficient representative of the whole area
         - n_years [years] is the number of years to process 
@@ -358,17 +374,20 @@ def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
     
     return testS, testQ
     
-    
-#########################################
+
+
+
+
+
+#%% Finding the best parameters
 
 
 
 # Define new parameters for the parameter optimization
 
-
-
 theta_absolute_max = [5e-6, 10, 200, 1000]
 ns_absolute_max = float('-inf')
+
 
 
 def T_SA(i):
@@ -398,6 +417,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     global ns_absolute_max
     global NS_out
     
+    
     Q_avg = [np.mean(Q_obs) for i in Q_obs]
     
     theta_old = theta_start.copy()  # initial values of the parameters
@@ -416,8 +436,9 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     seuil = 0.87    # seuil pour le NS coeff  
     iteration_max = 2e4
     NS_out = np.zeros(int(iteration_max))
-    print("Seuil choisi de : ", seuil)
     
+    
+    print("Seuil choisi de : ", seuil)
     print("Starting parameters : ", theta_old)
     
     
@@ -468,18 +489,22 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         
         n_sim += 1
         
-    return theta_absolute_max
+    return theta_absolute_max, NS_out
 
-
-#########################################
 
 
 
 # Valeur empirique trouvée par itération de l'algo
-best_param = [1.00000000e-07, 1.18112505e+01, 8.00374772e+01, 1.36199741e+03]
+best_param = [9e-7, 4.74, 84.04, 14]
 
-# Valeur d'un groupe
-best = [1.224e-5, 6.8311, 64.5218, 581.1]
+
+
+
+
+
+
+
+#%% Precipitation modelling
 
 
 
@@ -588,7 +613,11 @@ def rain_gen(years=100,plot=True):
         ax.legend()  
         
     return (P_gen)
-#########################################☻
+
+
+
+
+#%% Dam modelling
 
 
 
@@ -732,6 +761,14 @@ def Q_347(Q, plot=False):
     return sort_Q[rank]
 
 
+
+
+
+#%% reservoir routing
+
+
+
+
 ############## MAIN
 
 #parameters of the reservoir
@@ -759,8 +796,11 @@ kL = f*Lp/(2*g*D*A_pipe**2) + 1.5/(2*g*A**2)      #Loss coefficient
 
 
 #Power=9806*net_head*Q*eta/1000000    %[MW]
-gamma=g*1000
-Energy_price=75
+gamma = g*1000      # 1000=ro [kg/m3]
+Energy_price = 75   # [???]
+
+
+
 # Reservoir routing
 def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
     """
