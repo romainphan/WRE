@@ -276,6 +276,10 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         # parfois le programme s'arrête, la suite est pour stopper proprement
         # le programme a ce moment
         try:
+            # if s[t] > 1:
+            #     s[t] = 1
+            # elif s[t] < 0:
+            #     s[t] = 0
             L[t] = K_sat * s[t]**c       # [mm/h]
         except:
             print("program has a problem with  L[t] = K_sat * s[t]**c       # [mm/h]")
@@ -401,7 +405,6 @@ def check_model(K_sat, c, t_sub, z, P, K_c, n_years):
 
 
 
-theta_absolute_max = [5e-6, 10, 200, 1000]
 ns_absolute_max = float('-inf')
 
 
@@ -486,12 +489,12 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         # print(ns_old)
         
         if ns_new > ns_absolute_max:
+            theta_absolute_max = theta_new.copy()
+            ns_absolute_max = ns_new
             print("\n    NS maximum absolu amélioré     (iteration " + str(n_sim) + ")")
             print("    NS_max_absolu = ", round(ns_new, ndigits=3))
             print("    Paramètres : ", np.round(theta_absolute_max, decimals=8))
-            theta_absolute_max = theta_new.copy()
-            ns_absolute_max = ns_new
-        
+            
         if ns_new > ns_old:
             print("\nValeur de NS améliorée     (iteration " + str(n_sim) + ")")
             print("NS = ", round(ns_new, ndigits=3))
@@ -855,3 +858,34 @@ def reservoir_(Q,P,ET,volume_rating_curve):
         l[t+1] = vol_to_lvl(V[t+1], volume_rating_curve)
         
     return (V,l,A_sluice,Q_out,Q_HU,Q_g)
+
+#%%
+
+p1 = 9e-7
+p4 = 14
+c2 = 4.74
+c3 = 84.04
+Q_avg = [np.mean(Q_obs)]*len(Q_obs)
+mmax = 0
+p2max = 0
+p3max = 0
+
+xbounds = 5
+ybounds = 5
+
+for i2 in range(-xbounds, xbounds):
+    for i3 in range(-ybounds, ybounds):
+        p2 = c2 + i2/10
+        p3 = c3 + i3/10
+        
+        out = hydr_model(p1, p2, p3, p4, precipitation, K_c_glob, 6)[0]
+        temp = NS(out, Q_obs, Q_avg)
+        
+        if temp > mmax:
+            print("\n    New maximum found at NS = ", temp)
+            print("    Parameters equal to : ", p2, p3)
+            mmax = temp
+            p2max = p2
+            p3max = p3
+        else : print("NS = ", temp)
+        

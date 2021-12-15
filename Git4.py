@@ -432,7 +432,6 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     global Q_obs
     global theta_absolute_max
     global ns_absolute_max
-    global NS_out
     
     
     Q_avg = [np.mean(Q_obs) for i in Q_obs]
@@ -452,7 +451,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     n_sim = 0       # nb of simulations yet
     seuil = 0.87    # seuil pour le NS coeff  
     iteration_max = 2e4
-    NS_out = np.zeros(int(iteration_max))
+    NS_list = np.zeros(int(iteration_max))
     
     
     print("Seuil choisi de : ", seuil)
@@ -473,7 +472,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
                
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
         ns_new = NS(Q_mod, Q_obs, Q_avg)
-        NS_out[n_sim] = ns_new
+        NS_list[n_sim] = ns_new
         
         # print(ns_new)
         # print("#"*50)
@@ -505,8 +504,11 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         
         
         n_sim += 1
-        
-    return theta_absolute_max, NS_out
+    
+    NS_out = NS_list[:n_sim]
+    plt.plot(NS_out, label='NS indicator')
+    
+    return NS_out, theta_absolute_max
 
 
 
@@ -528,35 +530,38 @@ best_param = [9e-7, 4.74, 84.04, 14]
 
 def parametres(P):
     """
-    INPUT: Precipitation [mm/h] (Or other)
-    OUTPUT: parameters 
-    -lambda, 
-    -alpha, 
-    -monthly mean precipitation [mm/day] 
-    -monthly deviation
+    INPUT: 
+        - Precipitation [mm/h] (Or other)
+    OUTPUT: parameters that describe the rain properties
+        -lambda [-]
+        -alpha : average precipitation per rainy day [mm - not sure]
+        -monthly mean precipitation [mm/h] 
+        -monthly standard deviation [mm/h]
     """
-    years=int(len(P)/(365*24))
-    P_jour=[np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
+    years = int(len(P)/(365*24))
+    #P_jour = [np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
     
     n_rainy_day=[0]*12
-    I_rain=[0]*12
+    I_rain=[0]*12       # [mm/h]
     month_P=[[]]*12
 
-    for year in range(0,years):
-        for month in range(0,12):
+    #I_rain and month_P are the same ??
+
+    for year in range(years):
+        for month in range(12):
             for k in range(month_start[month],month_end[month]+1):
                 
-                x=P[365*year+k]
-                month_P[month]=month_P[month]+[x]
+                x = P[365*year+k]
+                month_P[month] = month_P[month]+[x]
                 if x != 0:
-                    n_rainy_day[month]=n_rainy_day[month]+1
-                    I_rain[month]=I_rain[month]+P[365*year+k]
-                    
-                    
-    lambda_p=[n_rainy_day[k]/(day_month[k]*years) for k in range(0,12)]
-    alpha=[I_rain[k]/n_rainy_day[k] for k in range (0,12)]
-    mean_P=[np.mean(month_P[k]) for k in range(0,12)]
-    std_P=[np.std(month_P[k]) for k in range(0,12)]
+                    n_rainy_day[month] += 1
+                    I_rain[month] += P[365*year+k]
+                                    
+    lambda_p = [n_rainy_day[k]/(day_month[k]*years) for k in range(12)]
+    alpha = [I_rain[k]/n_rainy_day[k] for k in range(12)]
+    mean_P = [np.mean(month_P[k]) for k in range(12)]
+    std_P = [np.std(month_P[k]) for k in range(12)]
+    
     return(lambda_p,alpha,mean_P,std_P)
     
     
@@ -982,3 +987,4 @@ def plot_routine(Q,Q_out,V,l):
     plt.legend()
     
     return None
+
