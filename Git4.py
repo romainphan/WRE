@@ -332,23 +332,17 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
 
 
 
-def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_0 = 0,T=T_m):
+def plot_model(Q, R, I, s, L, ET):
     """
     plots the outputs of the hydrological model using the same parameters.
     
     Inputs :
-        - K_sat [m/s] is the saturated hydraulic conductivity (free parameter)
-        - c [-] is the exponent of the hydraulic conductivity law (K = K_sat * s**c) (free parameter)
-        - t_sub [h] is the mean sub-superficial residence time (free parameter)
-        - z [mm] is the root zone thickness (free parameter)
-        - P [mm/h] is the hourly precipitation, is a vector !
-        - K_c [-] is the crop coefficient representative of the whole area
-        - n_years [years] is the number of years to process 
-    Optional :
-        - s_0 [-] soil moisture at time t=0. Defaults to 0.
-        - V_sup_0 [m3] Superficial volume of water at time t=0. Defaults to 0.
-        - V_sub_0 [m3] Sub-superficial volume of water at time t=0. Defaults to 0.
-        - T [degrees °C] monthly temperature, can be changed in a climate change scenario
+        - Q [m3/s] the total discharge 
+        - R [mm/h] the runoff         -> possible to change unit if not convenient
+        - I [mm/h] the infiltration   -> possible to change unit if not convenient
+        - s [-] the soil saturation
+        - L [mm/h] the leaching       -> possible to change unit if not convenient
+        - ET [mm/h] the actual evapotranspiration
     
     Output (plots) :
         - Q [m3/s] the total discharge 
@@ -359,13 +353,14 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         - ET [mm/h] the actual evapotranspiration
     """
 
-    out = hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0, V_sup_0, V_sub_0,T)
+    out = [Q, R, I, s, L, ET]
+    n_years=int(len(Q)/(365*24))
     
     lines = 2
     col = 3
     
     fig, axs = plt.subplots(lines, col,figsize=(18,10))
-    titres = ["Discharge [m3/s]", "R [mm/h]", "I [mm/h]", "s [-]", "L [mm/h]", "ET [mm/h]"]
+    titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]", "Leaching [mm/h]", "Evaporation [mm/h]"]
     
     for i in range(lines):
         for j in range(col):
@@ -373,6 +368,8 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
             axs[i, j].plot(out[j+3*i])
             axs[i, j].set_title(titres[j+3*i],fontsize=20)
     
+    title=" Time series -  "+str(n_years) + " years"
+    plt.suptitle(title,fontsize=25)
     plt.show()
     return None
 
@@ -622,23 +619,23 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
         #lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
         lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres(P_gen)
         
-        figure=plt.figure(figsize=(30,10))
-        
+        figure=plt.figure(figsize=(30,12))
+        plt.grid(True)
         plt.subplot(2,2,1)
-        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.subplots_adjust(hspace =0.4,wspace=0.1)
         ax=plt.gca()
         if climate_change:
             plt.plot(month_name,lambda_past,marker='o',label=obs)
         else: 
             plt.plot(month_name,lambda_,marker='o',label=obs)
         plt.plot(lambda_gen,marker='o',label=gen)
-        plt.xticks(rotation=50)
+        plt.xticks(rotation=50,fontsize=15)
         ax.set_title("Lambda",fontsize=20)
         ax.legend()
         
         plt.subplot(2,2,2)
         ax=plt.gca()
-        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.subplots_adjust(hspace =0.4,wspace=0.1)
         if climate_change:
             plt.plot(month_name,alpha_past,marker='o',label=obs)
         else: 
@@ -646,25 +643,25 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
             
         plt.plot(month_name,alpha_gen,marker='o',label=gen)
         ax.set_title("Alpha",fontsize=20)
-        plt.xticks(rotation=50)
+        plt.xticks(rotation=50,fontsize=15)
         ax.legend()
         
         plt.subplot(2,2,3)
         ax=plt.gca()
-        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,mean_P,marker='o',label=obs)
         plt.plot(month_name,mean_P_gen,marker='o',label=gen)
         ax.set_title("monthly mean precipitation",fontsize=20)
-        plt.xticks(rotation=50)
+        plt.xticks(rotation=50,fontsize=15)
         ax.legend()       
         
         plt.subplot(2,2,4)
         ax=plt.gca()
-        plt.subplots_adjust(hspace =0.4,wspace=0.2)
+        plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,std_P,marker='o',label=obs)
         plt.plot(month_name,std_P_gen,marker='o',label=gen)
         ax.set_title("monthly standard deviation",fontsize=20)
-        plt.xticks(rotation=50)
+        plt.xticks(rotation=50,fontsize=15)
         ax.legend()  
         
         plt.suptitle(title,fontsize=30)
