@@ -53,8 +53,8 @@ alpha_c=pd.read_csv(dirname+"/alpha_change.txt").T.to_numpy()[0]
 #temperature in a climate change scenario [degrees C]
 T_future=T_m+T_c 
 
-
-
+# change in monthly occurence of rainy days [%]
+lambda_c=pd.read_csv(dirname+"/lambda_change.txt").T.to_numpy()[0]
 #%% set up gobal PARAMETERS
 
 s_w = 0.25    # [-] Wilting point
@@ -95,7 +95,7 @@ a = 6.75e-7 * Ii**3 - 7.71e-5 * Ii**2 + 1.79e-2 * Ii + 0.49           # experime
 # monthly average potential evapotranspiration :
 ET_0 = [16*N_m[i] / 12 * (10*T_m[i]/Ii)**a / (24*day_month[i]) for i in range(12)]  # [mm/h]
 
-
+month_name=["january","february","mars","april","may","june","july","august","september","ocotber","november","december"]
 
 
 
@@ -267,6 +267,11 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     # for each time step do 
     for t in range(n_steps):           
         
+        if s[t] > 1 :
+            s[t] = 1
+        elif s[t] < 0:
+            s[t] = 0
+        
         # Infiltration
         I[t] = min(P[t], K_sat*1000*3600)   # [mm/h]
         
@@ -280,7 +285,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
         # parfois le programme s'arrête, la suite est pour stopper proprement
         # le programme a ce moment
         try:
-            L[t] = K_sat * s[t]**c       # [mm/h]
+            L[t] =1000*3600*( K_sat * s[t]**c)     # [mm/h]
         except:
             print("program has a problem with  L[t] = K_sat * s[t]**c       # [mm/h]")
             print("L[t] = ", L[t])
@@ -359,7 +364,7 @@ def plot_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     lines = 2
     col = 3
     
-    fig, axs = plt.subplots(lines, col,figsize=(20,10))
+    fig, axs = plt.subplots(lines, col,figsize=(18,10))
     titres = ["Discharge [m3/s]", "R [mm/h]", "I [mm/h]", "s [-]", "L [mm/h]", "ET [mm/h]"]
     
     for i in range(lines):
@@ -539,7 +544,7 @@ def parametres(P):
         -monthly standard deviation [mm/h]
     """
     years = int(len(P)/(365*24))
-    #P_jour = [np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
+    P_jour = [np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
     
     n_rainy_day=[0]*12
     I_rain=[0]*12       # [mm/h]
@@ -551,11 +556,11 @@ def parametres(P):
         for month in range(12):
             for k in range(month_start[month],month_end[month]+1):
                 
-                x = P[365*year+k]
+                x = P_jour[365*year+k]
                 month_P[month] = month_P[month]+[x]
                 if x != 0:
                     n_rainy_day[month] += 1
-                    I_rain[month] += P[365*year+k]
+                    I_rain[month] += P_jour[365*year+k]
                                     
     lambda_p = [n_rainy_day[k]/(day_month[k]*years) for k in range(12)]
     alpha = [I_rain[k]/n_rainy_day[k] for k in range(12)]
@@ -563,7 +568,6 @@ def parametres(P):
     std_P = [np.std(month_P[k]) for k in range(12)]
     
     return(lambda_p,alpha,mean_P,std_P)
-    
     
     
 ############################################
@@ -579,7 +583,7 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
     - climate_change : added to compute in a climate change scenario
     """
     #alpha lambda
-    precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
+    #precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
     lambda_,alpha,mean_P,std_P=parametres(precipitation)
     
     title=" Statistics of the generated Precipitations"
@@ -589,11 +593,14 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
     if climate_change:
         # We are in climate change scenarios, 
         #alpha is modified by the percent of changes in monthly mean rainfall intensity
+        alpha_past=alpha.copy()
+        lambda_past=lambda_.copy()
         for i in range(0,12):
             alpha[i]=(1+alpha_c[i]/(100))*alpha[i]
+            lambda_[i]=(1+lambda_c[i]/100)*lambda_[i]
         title=title+" - climate change scenario"
-        obs="current"
-        gen="future"
+        obs="current observation"
+        gen="future simumation"
             
             
     output = [0 for i in range(365*years)]
@@ -612,46 +619,57 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
     
     #statistic
     if plot:
-        lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
+        #lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres([sum(P_gen[24*k:24*k+24]) for k in range(0,years*365) ])
+        lambda_gen,alpha_gen,mean_P_gen,std_P_gen=parametres(P_gen)
         
         figure=plt.figure(figsize=(30,10))
         
         plt.subplot(2,2,1)
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
         ax=plt.gca()
-        plt.plot(lambda_,marker='o',label="observed")
-        plt.plot(lambda_gen,marker='o',label="generated")
+        if climate_change:
+            plt.plot(month_name,lambda_past,marker='o',label=obs)
+        else: 
+            plt.plot(month_name,lambda_,marker='o',label=obs)
+        plt.plot(lambda_gen,marker='o',label=gen)
+        plt.xticks(rotation=50)
         ax.set_title("Lambda",fontsize=20)
         ax.legend()
         
         plt.subplot(2,2,2)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
-        plt.plot(alpha,marker='o',label="observed")
-        plt.plot(alpha_gen,marker='o',label="generated")
+        if climate_change:
+            plt.plot(month_name,alpha_past,marker='o',label=obs)
+        else: 
+            plt.plot(month_name,alpha,marker='o',label=obs)
+            
+        plt.plot(month_name,alpha_gen,marker='o',label=gen)
         ax.set_title("Alpha",fontsize=20)
+        plt.xticks(rotation=50)
         ax.legend()
         
         plt.subplot(2,2,3)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
-        plt.plot(mean_P,marker='o',label="observed")
-        plt.plot(mean_P_gen,marker='o',label="generated")
+        plt.plot(month_name,mean_P,marker='o',label=obs)
+        plt.plot(month_name,mean_P_gen,marker='o',label=gen)
         ax.set_title("monthly mean precipitation",fontsize=20)
+        plt.xticks(rotation=50)
         ax.legend()       
         
         plt.subplot(2,2,4)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.2)
-        plt.plot(std_P,marker='o',label="observed")
-        plt.plot(std_P_gen,marker='o',label="generated")
-        ax.set_title("monthly mean deviation",fontsize=20)
+        plt.plot(month_name,std_P,marker='o',label=obs)
+        plt.plot(month_name,std_P_gen,marker='o',label=gen)
+        ax.set_title("monthly standard deviation",fontsize=20)
+        plt.xticks(rotation=50)
         ax.legend()  
         
         plt.suptitle(title,fontsize=30)
         
     return (P_gen)
-
 
 
 
@@ -829,13 +847,13 @@ Qlim = 100 #[m3/s]
 g = 9.806 # [m/s2] gravity
 
 f = (1/(-2*np.log(ks/(1000*D*3.7))))**2#Colebrook equation
-A_pipe=np.pi*D**2
-kL = f*Lp/(2*g*D*A_pipe**2) + 1.5/(2*g*A**2)      #Loss coefficient
+A_pipe=np.pi*(D/2)**2
+kL = f*Lp/(2*g*D) * 2.5 / A_pipe**2     # [m / (m3/s)^2] Loss coefficient
 
 
 #Power=9806*net_head*Q*eta/1000000    %[MW]
-gamma = g*1000      # 1000=ro [kg/m3]
-Energy_price = 75   # [???]
+gamma=g*1000
+Energy_price=75
 
 
 
@@ -884,7 +902,8 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
     Q_out = [0]*n     # [m3/s] total water out of the dam
     Q_HU = [0]*n      # [m3/s] water going through turbine to generate power
     Q_g = [0]*n       # [m3/s] water flow through the gate
-    Pow=[0]*n
+    Pow=[0]*n         # [Watt]
+    Y=[0]*n
     
     #Initialization
     l[0] = 14 
@@ -897,7 +916,7 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
                                             # whole day, 0 otherwise 
     # flood condition an damages
     y_lim = 0.1*np.sqrt(Qlim)+0.5 # maximum y before flood
-    D=0 # CHF, Damages 
+    Damages=0 # CHF, Damages 
     flood=False # Are we in a flood event or not?
     maxy=0 # maximum of height in a flood event
     n_flood=0
@@ -931,7 +950,7 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
         
         # power generation of the turbine [W]
         HT = l[t] + Deltaz - kL*QT**2   
-        Pow[t]=eta*gamma*Q_HU[t]*(HT*Q_HU[t]**2)
+        Pow[t]=eta*gamma*Q_HU[t]*(HT)
         
         
         # Detection of flood event
@@ -939,6 +958,7 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
             n_flood=n_flood+1
             
         y=0.1*np.sqrt(Q_out[t])
+        Y[t]=y
             
         if flood: # We are in a flood event
             if y<y_lim:
@@ -947,23 +967,27 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
                 maxy=0
                 flood=False
                 #print(z)
-                D=D+(1+z)**2.25
+                Damages=Damages+(1+z)**2.25
+                #print(Damages)
             else:
                 # Still in the flood event
                 if y>maxy:
                     maxy=y
                      
         elif y>=y_lim:
-            flood=True # Beginning of a flood event
+            flood=True
+            #print("flood")# Beginning of a flood event
             maxy=y
 
     
     p_flood=n_flood/n
     Total_energy=np.sum(Pow)
-    E_annual=Total_energy/(n*365*24*10**(-9)) # [GWh]
-    profit= Total_energy*Energy_price*10**(-6) - D*1000000
+    n_year=n/(365*24)
+    E_annual=(Total_energy/n_year)*10**(-9)# [GWh]
+    profit= Total_energy*Energy_price*10**(-6) - Damages*1000000
     
-    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow,profit,p_flood,E_annual)
+    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow,profit,p_flood,E_annual,Damages)
+
 
 
 ###Plot
@@ -984,7 +1008,7 @@ def plot_routine(Q,Q_out,V,l):
     plt.subplot(3,1,3)
     plt.plot(l)
     plt.ylabel("level")
-    plt.legend()
+    
     
     return None
 
