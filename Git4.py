@@ -1039,3 +1039,34 @@ def plot_routine(Q,Q_out,V,l,lmaxHU):
     
     return None
 
+##Monthly_mean
+def monthly_mean(P):
+    """
+    
+
+    Parameters
+    ----------
+    P : Table of hourly data.
+
+    Returns: table of mean monthly P
+   
+
+    """
+    years = int(len(P)/(365*24))
+    P_jour = [np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
+    
+      # [mm/h]
+    month_P=[[]]*12
+
+    #I_rain and month_P are the same ??
+
+    for year in range(years):
+        for month in range(12):
+            for k in range(month_start[month],month_end[month]+1):
+                
+                x = P_jour[365*year+k]
+                month_P[month] = month_P[month]+[x]
+
+    mean_P = [np.mean(month_P[k]) for k in range(12)]
+    return mean_P
+    
