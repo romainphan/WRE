@@ -361,12 +361,14 @@ def plot_model(Q, R, I, s, L, ET):
     
     fig, axs = plt.subplots(lines, col,figsize=(18,10))
     titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]", "Leaching [mm/h]", "Evaporation [mm/h]"]
-    
+    units=["m3/s","mm/h","mm/h","-","mm/h","mm/h"]
     for i in range(lines):
         for j in range(col):
             plt.subplots_adjust(hspace =0.3,wspace=0.2)
             axs[i, j].plot(out[j+3*i])
             axs[i, j].set_title(titres[j+3*i],fontsize=20)
+            axs[i, j].set_xlabel("time in hours")
+            axs[i, j].set_ylabel(units[j+3*i],fontsize=10)
     
     title=" Time series -  "+str(n_years) + " years"
     plt.suptitle(title,fontsize=25)
@@ -631,6 +633,7 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
         plt.plot(lambda_gen,marker='o',label=gen)
         plt.xticks(rotation=50,fontsize=15)
         ax.set_title("Lambda",fontsize=20)
+        ax.set_ylabel("[-]")
         ax.legend()
         
         plt.subplot(2,2,2)
@@ -643,6 +646,7 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
             
         plt.plot(month_name,alpha_gen,marker='o',label=gen)
         ax.set_title("Alpha",fontsize=20)
+        ax.set_ylabel("[mm]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()
         
@@ -651,7 +655,8 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,mean_P,marker='o',label=obs)
         plt.plot(month_name,mean_P_gen,marker='o',label=gen)
-        ax.set_title("monthly mean precipitation",fontsize=20)
+        ax.set_title("mean precipitation",fontsize=20)
+        ax.set_ylabel("average daily precipitation [mm/day]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()       
         
@@ -660,7 +665,8 @@ def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,std_P,marker='o',label=obs)
         plt.plot(month_name,std_P_gen,marker='o',label=gen)
-        ax.set_title("monthly standard deviation",fontsize=20)
+        ax.set_title(" standard deviation",fontsize=20)
+        ax.set_ylabel("[mm/day]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()  
         
@@ -805,13 +811,19 @@ def Q_347(Q, plot=False):
     
     rank = int(n*95/100)-1
     p_exceedance=[k/n for k in range (1,n+1)]
-    
+    Q347=sort_Q[rank]
     if plot:
+        #figure=plt.plot(figsize=(15,10))
         plt.semilogy(p_exceedance,sort_Q)
-        plt.title("Discharge Duration Curve")
-        #plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
+        plt.semilogy(p_exceedance,[Q347]*n,color="red",linestyle='-.',label="Minimum Flow")
+        plt.title("Discharge Duration Curve - Minimum Flow = "+str(round(Q347,2)) + " m3/s")
         
-    return sort_Q[rank]
+        #plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
+        plt.xlabel("probability of exceedance [-]")
+        plt.ylabel("Discharge [m3/s]")
+        plt.legend()
+        
+    return Q347
 
 
 
@@ -988,24 +1000,42 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
 
 
 ###Plot
-def plot_routine(Q,Q_out,V,l):
+def plot_routine(Q,Q_out,V,l,lmaxHU):
     
     '''
         Input: Qin, Qoutn V, l
         Plot main graph of reservoir routine
     '''
-    figure=plt.figure(figsize=(15,10))
+    figure=plt.figure(figsize=(16,10))
+    
     plt.subplot(3,1,1)
+    ax=plt.gca()
     plt.plot(Q,label="Qin")
     plt.plot(Q_out,label="Qout")
-    plt.ylabel("discharge")
-    plt.subplot(3,1,2)
-    plt.plot(V)
-    plt.ylabel("Volume")
-    plt.subplot(3,1,3)
-    plt.plot(l)
-    plt.ylabel("level")
+    plt.ylabel("Discharge [m3/s]")
+    plt.xlabel("time [hours]")
+    ax.legend()
     
+    plt.subplot(3,1,2)
+    ax=plt.gca()
+    plt.plot(V)
+    plt.ylabel("Volume [m3]")
+    plt.xlabel("time [hours]")
+    
+    plt.subplot(3,1,3)
+    ax=plt.gca()
+    plt.plot()
+    plt.plot([lmaxHU]*len(Q), label= "max level ",color="red",linestyle="--")
+    plt.plot(l)
+    
+    plt.ylabel("Level [m]")
+    plt.xlabel("time [hours]")
+    ax.legend()
+    
+    
+    title="Reservoir routine for " +str(int(len(Q)/(365*24)))+" years and lmax = " +str(lmaxHU) + " m"
+    
+    plt.suptitle(title,fontsize=20)
     
     return None
 
