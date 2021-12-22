@@ -265,12 +265,7 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
     Q[0] = A*(q_sup[0] + q_sub[0]) + Q_b
     
     # for each time step do 
-    for t in range(n_steps):           
-        
-        if s[t] > 1 :
-            s[t] = 1
-        elif s[t] < 0:
-            s[t] = 0
+    for t in range(n_steps):       
         
         # Infiltration
         I[t] = min(P[t], K_sat*1000*3600)   # [mm/h]
@@ -310,11 +305,11 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
                 # elif ans == "n":
                 #     print("Aborting...")
                 #     raise ValueError("The value of the soil moisture is negative !")
-                # s[t+1] = 0
-                error_count += 1
+                s[t+1] = 0
+                # error_count += 1
             elif s[t+1] > 1:
-                # s[t+1] = 1
-                error_count += 0.0001
+                s[t+1] = 1
+                # error_count += 0.0001
         except IndexError:
             break
         
@@ -431,11 +426,18 @@ def NS(Q, Q_observed, Q_averaged):
     return 1 - a/b
 
 
+iteration_max = 15e3
+NS_list = np.zeros(int(iteration_max)+1)
+NS_out = []
+
 def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     
     global Q_obs
     global theta_absolute_max
     global ns_absolute_max
+    global NS_out
+    global NS_list
+    
     
     
     Q_avg = [np.mean(Q_obs) for i in Q_obs]
@@ -454,12 +456,12 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     ns_old = float("-inf")      # value of the NS coefficient
     n_sim = 0       # nb of simulations yet
     seuil = 0.87    # seuil pour le NS coeff  
-    iteration_max = 2e4
-    NS_list = np.zeros(int(iteration_max))
+    
     
     
     print("Seuil choisi de : ", seuil)
     print("Starting parameters : ", theta_old)
+    print("\n")
     
     
     while ns_old < seuil:
@@ -483,33 +485,36 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         # print(ns_old)
         
         if ns_new > ns_absolute_max:
-            print("\n    NS maximum absolu amélioré     (iteration " + str(n_sim) + ")")
-            print("    NS_max_absolu = ", round(ns_new, ndigits=3))
-            print("    Paramètres : ", np.round(theta_absolute_max, decimals=8))
+            #print("\n    NS maximum absolu amélioré     (iteration " + str(n_sim) + ")")
+            #print("    NS_max_absolu = ", round(ns_new, ndigits=3))
+            #print("    Paramètres : ", np.round(theta_absolute_max, decimals=8))
             theta_absolute_max = theta_new.copy()
             ns_absolute_max = ns_new
         
         if ns_new > ns_old:
-            print("\nValeur de NS améliorée     (iteration " + str(n_sim) + ")")
-            print("NS = ", round(ns_new, ndigits=3))
+            #print("\nValeur de NS améliorée     (iteration " + str(n_sim) + ")")
+            #print("NS = ", round(ns_new, ndigits=3))
             theta_old = theta_new.copy()
             ns_old = ns_new
         
         elif np.random.uniform() < np.exp(-abs(ns_new-ns_old)/T_SA(n_sim)):
-            print("\nOn va voir ailleurs        (iteration " + str(n_sim) + ")")
-            print("NS = ", round(ns_new, ndigits=3))
+            #print("\nOn va voir ailleurs        (iteration " + str(n_sim) + ")")
+            #print("NS = ", round(ns_new, ndigits=3))
             
             theta_old = theta_new.copy()
             ns_old = ns_new
         
-        if n_sim > iteration_max:
+        print("Iteration "+str(n_sim)+" / Best NS = "+str(ns_absolute_max)+" / "+str(theta_absolute_max), end="\r")
+        
+        if n_sim >= iteration_max:
             print("Iterations maximales dépassées pour la boucle principale")
             break
         
         
         n_sim += 1
     
-    NS_out = NS_list[:n_sim]
+    NS_out = NS_list[:n_sim+1]
+    NS_list = NS_out.copy()
     plt.plot(NS_out, label='NS indicator')
     
     return NS_out, theta_absolute_max
@@ -518,7 +523,7 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
 
 
 # Valeur empirique trouvée par itération de l'algo
-best_param = [9e-7, 4.74, 84.04, 14]
+# [8.70000000e-07, 7.93257754e+00, 9.86297945e+01, 3.79904507e+02], NS = 0.864
 
 
 
