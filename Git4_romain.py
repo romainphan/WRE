@@ -95,7 +95,7 @@ a = 6.75e-7 * Ii**3 - 7.71e-5 * Ii**2 + 1.79e-2 * Ii + 0.49           # experime
 # monthly average potential evapotranspiration :
 ET_0 = [16*N_m[i] / 12 * (10*T_m[i]/Ii)**a / (24*day_month[i]) for i in range(12)]  # [mm/h]
 
-month_name = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+month_name=["january","february","mars","april","may","june","july","august","september","ocotber","november","december"]
 
 
 
@@ -327,12 +327,12 @@ def hydr_model(K_sat, c, t_sub, z, P, K_c, n_years, s_0 = 0, V_sup_0 = 0, V_sub_
 
 
 
-def plot_model(Q, R, I, s, L, ET, replace_discharge_by_precipitation=False, linewidth=1.5):
+def plot_model(Q, R, I, s, L, ET):
     """
     plots the outputs of the hydrological model using the same parameters.
     
     Inputs :
-        - Q [m3/s] the total discharge (or the precipitation [mm/h])
+        - Q [m3/s] the total discharge 
         - R [mm/h] the runoff         -> possible to change unit if not convenient
         - I [mm/h] the infiltration   -> possible to change unit if not convenient
         - s [-] the soil saturation
@@ -340,7 +340,7 @@ def plot_model(Q, R, I, s, L, ET, replace_discharge_by_precipitation=False, line
         - ET [mm/h] the actual evapotranspiration
     
     Output (plots) :
-        - Q [m3/s] the total discharge (or the precipitation [mm/h])
+        - Q [m3/s] the total discharge 
         - R [mm/h] the runoff         -> possible to change unit if not convenient
         - I [mm/h] the infiltration   -> possible to change unit if not convenient
         - s [-] the soil saturation
@@ -348,28 +348,21 @@ def plot_model(Q, R, I, s, L, ET, replace_discharge_by_precipitation=False, line
         - ET [mm/h] the actual evapotranspiration
     """
 
-    n_years=int(len(Q)/(365*24))
-
     out = [Q, R, I, s, L, ET]
-    titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]", "Leaching [mm/h]", "Evapotranspiration [mm/h]"]
-    units=["[m3/s]","[mm/h]","[mm/h]","[-]","[mm/h]","[mm/h]"]
-    
-    if replace_discharge_by_precipitation:
-        titres[0] = "Precipitation"
-        units[0] = "[mm/h]"
+    n_years=int(len(Q)/(365*24))
     
     lines = 2
     col = 3
-    t = [2000 + i/365/24 for i in range(n_years*24*365)]
     
     fig, axs = plt.subplots(lines, col,figsize=(18,10))
-    
+    titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]", "Leaching [mm/h]", "Evaporation [mm/h]"]
+    units=["m3/s","mm/h","mm/h","-","mm/h","mm/h"]
     for i in range(lines):
         for j in range(col):
             plt.subplots_adjust(hspace =0.3,wspace=0.2)
-            axs[i, j].plot(t, out[j+3*i], linewidth = linewidth)
+            axs[i, j].plot(out[j+3*i])
             axs[i, j].set_title(titres[j+3*i],fontsize=20)
-            axs[i, j].set_xlabel("Time [years]")
+            axs[i, j].set_xlabel("time in hours")
             axs[i, j].set_ylabel(units[j+3*i],fontsize=10)
     
     title=" Time series -  "+str(n_years) + " years"
@@ -559,17 +552,15 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
 def parametres(P):
     """
     INPUT: 
-        - Precipitation [mm/h] 
-        
+        - Precipitation [mm/h] (Or other)
     OUTPUT: parameters that describe the rain properties
-        - lambda [-] frequency of rainfall events
-        - alpha [mm] average precipitation per rainy day
-        - monthly averaged mean precipitation [mm/day]
-        - monthly averaged precipitation standard deviation [mm/day]
+        -lambda [-]
+        -alpha : average precipitation per rainy day [mm - not sure]
+        -monthly mean precipitation [mm/h] 
+        -monthly standard deviation [mm/h]
     """
-    
     years = int(len(P)/(365*24))
-    P_jour = [np.sum(P[24*k:24*(k+1)]) for k in range(years*365) ] # [mm/day] for each day
+    P_jour = [np.sum(P[24*k:24*k+24]) for k in range(0,years*365) ] #[mm/jour]
     
     n_rainy_day=[0]*12
     I_rain=[0]*12       # [mm/h]
@@ -599,7 +590,7 @@ def parametres(P):
 
 
 
-def rain_gen(years=100, plot=True, climate_change=False, alpha_c=alpha_c):
+def rain_gen(years=100,plot=True,climate_change=False,alpha_c=alpha_c):
     """
     INPUT:
     - years: number of year we want to simulate
@@ -611,21 +602,21 @@ def rain_gen(years=100, plot=True, climate_change=False, alpha_c=alpha_c):
     #precipitationj=[sum(precipitation[24*k:24*k+24]) for k in range(0,6*365) ]
     lambda_,alpha,mean_P,std_P=parametres(precipitation)
     
-    title="Statistics of the generated precipitation"
-    obs="Observed"
-    gen="Generated"
+    title=" Statistics of the generated Precipitations"
+    obs="observed"
+    gen="generated"
     
     if climate_change:
         # We are in climate change scenarios, 
         #alpha is modified by the percent of changes in monthly mean rainfall intensity
         alpha_past=alpha.copy()
         lambda_past=lambda_.copy()
-        for i in range(12):
+        for i in range(0,12):
             alpha[i]=(1+alpha_c[i]/(100))*alpha[i]
             lambda_[i]=(1+lambda_c[i]/100)*lambda_[i]
         title=title+" - climate change scenario"
-        obs="Current observation"
-        gen="Future simulation"
+        obs="current observation"
+        gen="future simumation"
             
             
     output = [0 for i in range(365*years)]
@@ -649,8 +640,6 @@ def rain_gen(years=100, plot=True, climate_change=False, alpha_c=alpha_c):
         
         figure=plt.figure(figsize=(30,12))
         plt.grid(True)
-        
-        # lambda
         plt.subplot(2,2,1)
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
         ax=plt.gca()
@@ -661,10 +650,9 @@ def rain_gen(years=100, plot=True, climate_change=False, alpha_c=alpha_c):
         plt.plot(lambda_gen,marker='o',label=gen)
         plt.xticks(rotation=50,fontsize=15)
         ax.set_title("Lambda",fontsize=20)
-        ax.set_ylabel("[-]", fontsize=15)
+        ax.set_ylabel("[-]")
         ax.legend()
         
-        # alpha
         plt.subplot(2,2,2)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
@@ -675,29 +663,27 @@ def rain_gen(years=100, plot=True, climate_change=False, alpha_c=alpha_c):
             
         plt.plot(month_name,alpha_gen,marker='o',label=gen)
         ax.set_title("Alpha",fontsize=20)
-        ax.set_ylabel("[mm]", fontsize=15)
+        ax.set_ylabel("[mm]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()
         
-        # mean
         plt.subplot(2,2,3)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,mean_P,marker='o',label=obs)
         plt.plot(month_name,mean_P_gen,marker='o',label=gen)
-        ax.set_title("Average daily precipitation",fontsize=20)
-        ax.set_ylabel("[mm / day]", fontsize=15)
+        ax.set_title("mean precipitation",fontsize=20)
+        ax.set_ylabel("average daily precipitation [mm/day]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()       
         
-        # std deviation
         plt.subplot(2,2,4)
         ax=plt.gca()
         plt.subplots_adjust(hspace =0.4,wspace=0.1)
         plt.plot(month_name,std_P,marker='o',label=obs)
         plt.plot(month_name,std_P_gen,marker='o',label=gen)
-        ax.set_title("Standard deviation",fontsize=20)
-        ax.set_ylabel("[mm / day]", fontsize=15)
+        ax.set_title(" standard deviation",fontsize=20)
+        ax.set_ylabel("[mm/day]")
         plt.xticks(rotation=50,fontsize=15)
         ax.legend()  
         
@@ -831,7 +817,6 @@ def Q_347(Q, plot=False):
     Input :
         - Q [m3/s] (or another unit) the input discharge
         - plot (default = False) plots the discharge curve and the output Q_347
-            /!\ The units displayed on the graph are set to m3/s  /!\
     
     Output :
         - Q_347 [m3/s] (or the other unit) the discharge that is exceeded 95%
@@ -844,18 +829,16 @@ def Q_347(Q, plot=False):
     rank = int(n*95/100)-1
     p_exceedance=[k/n for k in range (1,n+1)]
     Q347=sort_Q[rank]
-    
     if plot:
-        figure=plt.figure(figsize=(10,5))
-        plt.semilogy(p_exceedance,sort_Q, label="Discharge duration curve")
+        #figure=plt.plot(figsize=(15,10))
+        plt.semilogy(p_exceedance,sort_Q)
         plt.semilogy(p_exceedance,[Q347]*n,color="red",linestyle='-.',label="Minimum Flow")
-        plt.title("Discharge Duration Curve - Minimum Flow = "+str(round(Q347,2)) + " m3/s", fontsize=15)
+        plt.title("Discharge Duration Curve - Minimum Flow = "+str(round(Q347,2)) + " m3/s")
         
         #plt.plot(p_exceedance,[sort_Q[rank]]*(n),color="red")
         plt.xlabel("probability of exceedance [-]")
         plt.ylabel("Discharge [m3/s]")
         plt.legend()
-        plt.show()
         
     return Q347
 
