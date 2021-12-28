@@ -1029,7 +1029,7 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
     E_annual=(Total_energy/n_year)*10**(-9)# [GWh]
     profit= Total_energy*Energy_price*10**(-6) - Damages*1000000
     
-    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow,profit,p_flood,E_annual,Damages)
+    return (V,l,A_sluice,Q_out,Q_HU,Q_g,Pow,profit,p_flood,E_annual,Damages,n_year)
 
 
 
@@ -1044,8 +1044,8 @@ def plot_routine(Q,Q_out,V,l,lmaxHU):
     
     plt.subplot(3,1,1)
     ax=plt.gca()
-    plt.plot(Q,label="Qin")
-    plt.plot(Q_out,label="Qout")
+    plt.plot(Q,label="Input Discharge")
+    plt.plot(Q_out,label="Output Discharge")
     plt.ylabel("Discharge [m3/s]")
     plt.xlabel("time [hours]")
     ax.legend()
@@ -1058,9 +1058,8 @@ def plot_routine(Q,Q_out,V,l,lmaxHU):
     
     plt.subplot(3,1,3)
     ax=plt.gca()
-    plt.plot()
-    plt.plot([lmaxHU]*len(Q), label= "max level ",color="red",linestyle="--")
     plt.plot(l)
+    plt.plot([lmaxHU]*len(Q), label= "max level ",color="red",linestyle="--")
     
     plt.ylabel("Level [m]")
     plt.xlabel("time [hours]")
