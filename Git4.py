@@ -1034,43 +1034,50 @@ def reservoir_routine(Q,P,ET,volume_rating_curve,lmax_HU=15):
 
 
 ###Plot
-def plot_routine(Q,Q_out,V,l,lmaxHU):
-    
+def plot_routine(Q, Q_out, V, l, lmaxHU):
     '''
         Input: Qin, Qoutn V, l
         Plot main graph of reservoir routine
     '''
-    figure=plt.figure(figsize=(16,10))
+    warnings.simplefilter("ignore")
+    
+    h_spillway = 19 # height [m] of the spillway
+    
+    figure = plt.figure(figsize=(16,10))
+    n = len(Q)
+    t = [2000+ i/365/24 for i in range(n)]
     
     plt.subplot(3,1,1)
     ax=plt.gca()
-    plt.plot(Q,label="Input Discharge")
-    plt.plot(Q_out,label="Output Discharge")
+    plt.plot(t, Q, label="Input Discharge")
+    plt.plot(t, Q_out, label="Output Discharge")
     plt.ylabel("Discharge [m3/s]")
-    plt.xlabel("time [hours]")
+    plt.xlabel("Time [years]")
     ax.legend()
     
     plt.subplot(3,1,2)
     ax=plt.gca()
-    plt.plot(V)
+    plt.plot(t, V)
     plt.ylabel("Volume [m3]")
-    plt.xlabel("time [hours]")
+    plt.xlabel("Time [years]")
     
     plt.subplot(3,1,3)
     ax=plt.gca()
-    plt.plot(l)
-    plt.plot([lmaxHU]*len(Q), label= "max level ",color="red",linestyle="--")
+    plt.plot(t, l)
+    plt.plot(t, [lmaxHU]*len(Q), label= "Max level for hydroelectric use",color="orange",linestyle="--", linewidth=2)
+    plt.plot(t, [h_spillway]*len(Q), label= "Level of the spillway",color="red",linestyle="-", linewidth=2)
     
     plt.ylabel("Level [m]")
-    plt.xlabel("time [hours]")
+    plt.xlabel("Time [years]")
     ax.legend()
     
     
     title="Reservoir routine for " +str(int(len(Q)/(365*24)))+" years and lmax = " +str(lmaxHU) + " m"
     
     plt.suptitle(title,fontsize=20)
+    plt.show()
     
-    return None
+    
 
 ##Monthly_mean
 def monthly_mean(P):
