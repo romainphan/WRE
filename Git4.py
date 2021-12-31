@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 import random as rd
+import scipy.stats
 warnings.filterwarnings("error")
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 # import scipy as scipy
@@ -457,6 +458,8 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
                     [1, 2000]]      # min/max values of the parameters
     theta_var = [np.diff(i)[0]/20 for i in theta_minmax]   # variance of the parameter, equal to 5% of the range
     
+    # prepare the plot of the evolution of parameters
+    theta_list = np.zeros((4, iteration_max))
     
     
     # parameters
@@ -474,42 +477,36 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
     
     while ns_old < seuil:
         
+        if n_sim == iteration_max:
+            print("Iterations maximales dépassées pour la boucle principale")
+            break        
+        
         # print(n_sim)
         # generate new parameters
         for i in range(4):
-            keep_gen = True
-            while keep_gen: 
-                theta_new[i] = np.random.normal(loc=theta_old[i], scale=theta_var[i])
-                
-                if theta_new[i] >= theta_minmax[i][0] and theta_new[i] <= theta_minmax[i][1]:
-                    keep_gen = False
+            theta_new[i] = scipy.stats.truncnorm.rvs( \
+                    (theta_minmax[i][0]-theta_old[i])/theta_var[i], \
+                    (theta_minmax[i][1]-theta_old[i])/theta_var[i], \
+                    loc = theta_old[i], scale = theta_var[i])
                
         Q_mod = hydr_model(theta_new[0], theta_new[1], theta_new[2], theta_new[3], precipitation, K_c, 6)[0]
         ns_new = NS(Q_mod, Q_obs, Q_avg)
         
-        # print(ns_new)
-        # print("#"*50)
-        # print(ns_old)
-        
-        if ns_new > ns_absolute_max:
-            #print("\n    NS maximum absolu amélioré     (iteration " + str(n_sim) + ")")
-            #print("    NS_max_absolu = ", round(ns_new, ndigits=3))
-            #print("    Paramètres : ", np.round(theta_absolute_max, decimals=8))
-            theta_absolute_max = theta_new.copy()
-            ns_absolute_max = ns_new
-        
         if ns_new > ns_old:
-            #print("\nValeur de NS améliorée     (iteration " + str(n_sim) + ")")
-            #print("NS = ", round(ns_new, ndigits=3))
+            
+            if ns_new > ns_absolute_max:
+                theta_absolute_max = theta_new.copy()
+                ns_absolute_max = ns_new
+                
             theta_old = theta_new.copy()
             ns_old = ns_new
             NS_list[n_sim_valid] = ns_new
+            print(theta_new)
+            for i in range(4):
+                theta_list[i][n_sim_valid] = theta_new[i]
             n_sim_valid += 1
         
         elif np.random.uniform() < np.exp(-abs(ns_new-ns_old)/T_SA(n_sim)):
-            #print("\nOn va voir ailleurs        (iteration " + str(n_sim) + ")")
-            #print("NS = ", round(ns_new, ndigits=3))
-            
             theta_old = theta_new.copy()
             ns_old = ns_new
             NS_list[n_sim_valid] = ns_new
@@ -518,25 +515,66 @@ def opt_param(theta_start = [5e-6, 10, 200, 1000]):
         
         print("Iteration "+str(n_sim)+" / Best NS = "+str(ns_absolute_max)+" / "+str(theta_absolute_max), end="\r")
         
-        if n_sim >= iteration_max:
-            print("Iterations maximales dépassées pour la boucle principale")
-            break
+        
         
         
         n_sim += 1
     
-    NS_list[n_sim_valid:] = []
+    NS_list[n_sim_valid:]
     
     
     plt.figure()
+    plt.grid(True)
     ax = plt.gca()
     ax.set_title("Convergence of the NS indicator when determining optimal parameters",fontsize=20)
     ax.set_ylabel("NS indicator")
     ax.set_xlabel("Number of accepted iteration")    
-    plt.plot(NS_list, label='NS indicator')
+    plt.plot(NS_list[:n_sim_valid], label='NS indicator')
     plt.show()
     
-    return ns_absolute_max, theta_absolute_max
+    
+    plt.figure(figsize=(30,20))
+    plt.grid(True)
+    
+    # K_sat
+    plt.subplot(2,2,1)
+    plt.subplots_adjust(hspace =0.4,wspace=0.1)
+    ax=plt.gca() 
+    plt.plot(theta_list[0][:n_sim_valid])
+    ax.set_title("K_sat convergence",fontsize=20)
+    ax.set_xlabel("Number of accepted iteration", fontsize=20)
+    ax.set_ylabel("K_sat [m/s]", fontsize=15)
+    
+    # K_sat
+    plt.subplot(2,2,2)
+    plt.subplots_adjust(hspace =0.4,wspace=0.1)
+    ax=plt.gca() 
+    plt.plot(theta_list[1][:n_sim_valid])
+    ax.set_title("c convergence",fontsize=20)
+    ax.set_xlabel("Number of accepted iteration", fontsize=20)
+    ax.set_ylabel("c [-]", fontsize=15)
+    
+    # K_sat
+    plt.subplot(2,2,3)
+    plt.subplots_adjust(hspace =0.4,wspace=0.1)
+    ax=plt.gca() 
+    plt.plot(theta_list[2][:n_sim_valid])
+    ax.set_title("t_sub convergence",fontsize=20)
+    ax.set_xlabel("Number of accepted iteration", fontsize=20)
+    ax.set_ylabel("t_sub [h]", fontsize=15)
+    
+    # K_sat
+    plt.subplot(2,2,4)
+    plt.subplots_adjust(hspace =0.4,wspace=0.1)
+    ax=plt.gca() 
+    plt.plot(theta_list[3][:n_sim_valid])
+    ax.set_title("z convergence",fontsize=20)
+    ax.set_xlabel("Number of accepted iteration", fontsize=20)
+    ax.set_ylabel("z [mm]", fontsize=15)
+    
+    plt.suptitle("Markov chains of the parameters",fontsize=30)
+    
+    return ns_absolute_max, theta_absolute_max, theta_list
 
 
 
