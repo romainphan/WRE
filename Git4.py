@@ -190,6 +190,24 @@ def downscaling(Pdaily):
 ################################
 
 
+def rel_diff(a, b, ndigits=None):
+    """
+    Input :
+        - a, scalar
+        - b, scalar
+        - ndigits, optional parameter, None by default. IF an integer is 
+            entered, the result will be displayed roundedwith this number of 
+            decimals. None outpus the result without rounding it.
+    
+    Output :
+        (a-b)/b *100
+        ie the relative difference in percentage between a and b (b being the reference)
+    """
+    return round((a-b)/b * 100, ndigits=ndigits)
+
+
+
+
 
 #%% Hydrological model
 #   1. hydr_model models the hydrological quantites according to the parameters
@@ -927,9 +945,9 @@ lmin_HU = 9 # [m] min height for electricity generation
 Qlim = 100 #[m3/s]
 g = 9.806 # [m/s2] gravity
 
-f = (1/(-2*np.log(ks/(1000*D*3.7))))**2#Colebrook equation
+f = (1/(-2*np.log(ks/(1000*D*3.7))))**2 #Colebrook equation
 A_pipe=np.pi*(D/2)**2
-kL = f*Lp/(2*g*D) * 2.5 / A_pipe**2     # [m / (m3/s)^2] Loss coefficient
+kL = f*Lp/(2*g*D) * 1 / A_pipe**2     # [m / (m3/s)^2] Loss coefficient
 
 
 #Power=9806*net_head*Q*eta/1000000    %[MW]
