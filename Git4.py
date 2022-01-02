@@ -948,7 +948,7 @@ g = 9.806 # [m/s2] gravity
 
 f = (1/(-2*np.log(ks/(1000*D*3.7))))**2 #Colebrook equation
 A_pipe=np.pi*(D/2)**2
-kL = f*Lp/(2*g*D) * 1 / A_pipe**2     # [m / (m3/s)^2] Loss coefficient
+kL = f*Lp/(2*g*D) * 1.5 / A_pipe**2     # [m / (m3/s)^2] Loss coefficient
 
 
 #Power=9806*net_head*Q*eta/1000000    %[MW]
