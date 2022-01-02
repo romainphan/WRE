@@ -370,7 +370,8 @@ def plot_model(Q, R, I, s, L, ET, replace_discharge_by_precipitation=False, line
     n_years=int(len(Q)/(365*24))
 
     out = [Q, R, I, s, L, ET]
-    titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]", "Leaching [mm/h]", "Evapotranspiration [mm/h]"]
+    titres = ["Discharge [m3/s]", "Runoff [mm/h]", "Infiltration [mm/h]", "soil moisture [-]",\
+              "Leaching [mm/h]", "Evapotranspiration [mm/h]"]
     units=["[m3/s]","[mm/h]","[mm/h]","[-]","[mm/h]","[mm/h]"]
     
     if replace_discharge_by_precipitation:
